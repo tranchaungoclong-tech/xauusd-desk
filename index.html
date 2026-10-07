@@ -72,6 +72,7 @@
     .chart-box { position: relative; user-select: none; }
     canvas { width: 100%; height: 420px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; display: block; touch-action: none; cursor: grab; }
     canvas.drawing { cursor: crosshair; }
+    canvas.erasing { cursor: pointer; }
     canvas.axis-y { cursor: ns-resize; }
     canvas.axis-x { cursor: ew-resize; }
     canvas.grabbing { cursor: grabbing; }
@@ -139,6 +140,7 @@
       <button type="button" data-tool="fib">Fib</button>
       <button type="button" data-tool="hline">HLine</button>
       <button type="button" data-tool="rect">Khung</button>
+      <button type="button" data-tool="del">Del</button>
       <button type="button" id="btnUndo">Undo</button>
       <button type="button" id="btnClearDraw">Xóa kẻ</button>
     </div>
@@ -174,6 +176,7 @@
   var yHi = null;
   var tool = "pan";
   var drawings = [];
+  var sel = -1;
   var draft = null;
   var drag = null;
   var hover = null;
@@ -549,19 +552,50 @@
   }
 
   var FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-  function paintOne(obj, ghost) {
+  function distSeg(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var len = dx * dx + dy * dy;
+    var t = len ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len)) : 0;
+    var x = x1 + t * dx, y = y1 + t * dy;
+    return Math.hypot(px - x, py - y);
+  }
+  function hitDraw(p) {
+    for (var i = drawings.length - 1; i >= 0; i--) {
+      var o = drawings[i];
+      if (o.type === "hline") {
+        if (Math.abs(Y(o.p) - p.y) < 8 && p.x >= layout.left && p.x <= layout.w - layout.right) return i;
+      } else if (o.type === "line") {
+        if (distSeg(p.x, p.y, tToX(o.t1), Y(o.p1), tToX(o.t2), Y(o.p2)) < 8) return i;
+      } else if (o.type === "rect") {
+        var x1 = tToX(o.t1), x2 = tToX(o.t2), y1 = Y(o.p1), y2 = Y(o.p2);
+        var l = Math.min(x1, x2) - 5, r = Math.max(x1, x2) + 5, t = Math.min(y1, y2) - 5, b = Math.max(y1, y2) + 5;
+        if (p.x >= l && p.x <= r && p.y >= t && p.y <= b) return i;
+      } else if (o.type === "fib") {
+        var xa = tToX(o.t1), xb = tToX(o.t2);
+        var pLo = Math.min(o.p1, o.p2), pHi = Math.max(o.p1, o.p2);
+        var span = pHi - pLo || 1;
+        for (var k = 0; k < FIB.length; k++) {
+          var pv = o.p1 > o.p2 ? o.p1 - span * FIB[k] : o.p1 + span * FIB[k];
+          if (Math.abs(Y(pv) - p.y) < 7 && p.x >= Math.min(xa, xb) - 4 && p.x <= Math.max(xa, xb) + 44) return i;
+        }
+      }
+    }
+    return -1;
+  }
+  function paintOne(obj, ghost, selected) {
     ctx.globalAlpha = ghost ? 0.7 : 1;
     if (obj.type === "hline") {
       var y = Y(obj.p);
-      ctx.strokeStyle = "#6ec8ff";
+      ctx.strokeStyle = selected ? "#fff" : "#6ec8ff";
+      ctx.lineWidth = selected ? 2.4 : 1.4;
       ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(layout.left, y); ctx.lineTo(layout.w - layout.right, y); ctx.stroke();
-      ctx.fillStyle = "#6ec8ff";
+      ctx.fillStyle = selected ? "#fff" : "#6ec8ff";
       ctx.font = "10px Segoe UI";
       ctx.fillText(n2(obj.p), layout.left + 6, y - 4);
     } else if (obj.type === "line") {
-      ctx.strokeStyle = "#6ec8ff";
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = selected ? "#fff" : "#6ec8ff";
+      ctx.lineWidth = selected ? 2.6 : 1.6;
       ctx.beginPath();
       ctx.moveTo(tToX(obj.t1), Y(obj.p1));
       ctx.lineTo(tToX(obj.t2), Y(obj.p2));
@@ -570,9 +604,9 @@
     } else if (obj.type === "rect") {
       var x1 = tToX(obj.t1), x2 = tToX(obj.t2);
       var y1 = Y(obj.p1), y2 = Y(obj.p2);
-      ctx.fillStyle = "rgba(46,120,230,.16)";
-      ctx.strokeStyle = "#2e78e6";
-      ctx.lineWidth = 1.6;
+      ctx.fillStyle = selected ? "rgba(255,255,255,.12)" : "rgba(46,120,230,.16)";
+      ctx.strokeStyle = selected ? "#fff" : "#2e78e6";
+      ctx.lineWidth = selected ? 2.4 : 1.6;
       ctx.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
       ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
       ctx.lineWidth = 1;
@@ -583,21 +617,29 @@
       FIB.forEach(function (lv) {
         var p = obj.p1 > obj.p2 ? obj.p1 - span * lv : obj.p1 + span * lv;
         var y = Y(p);
-        ctx.strokeStyle = lv === 0.618 || lv === 0.382 ? "#e0b13a" : "rgba(110,200,255,.85)";
+        ctx.strokeStyle = selected ? "#fff" : (lv === 0.618 || lv === 0.382 ? "#e0b13a" : "rgba(110,200,255,.85)");
+        ctx.lineWidth = selected ? 2 : 1;
         ctx.beginPath();
         ctx.moveTo(Math.min(xa, xb), y);
         ctx.lineTo(Math.max(xa, xb) + 40, y);
         ctx.stroke();
-        ctx.fillStyle = "#c9d4e3";
+        ctx.fillStyle = selected ? "#fff" : "#c9d4e3";
         ctx.font = "10px Segoe UI";
         ctx.fillText((lv * 100).toFixed(1) + "%  " + n2(p), Math.max(xa, xb) + 6, y - 3);
       });
     }
     ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
   }
   function paintDrawings() {
-    drawings.forEach(function (o) { paintOne(o, false); });
-    if (draft) paintOne(draft, true);
+    drawings.forEach(function (o, i) { paintOne(o, false, i === sel); });
+    if (draft) paintOne(draft, true, false);
+  }
+  function dropSel() {
+    if (sel < 0) return;
+    drawings.splice(sel, 1);
+    sel = -1;
+    render();
   }
 
   function render() {
@@ -701,18 +743,25 @@
   });
   $("btnRefresh").addEventListener("click", refreshNow);
   function setTool(name) {
+    if (name !== "pan" && name === tool) name = "pan";
     tool = name;
     draft = null;
-    cv.classList.toggle("drawing", name !== "pan");
+    if (name !== "del") sel = -1;
+    cv.classList.toggle("drawing", name !== "pan" && name !== "del");
+    cv.classList.toggle("erasing", name === "del");
     document.querySelectorAll("[data-tool]").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-tool") === name);
     });
+    render();
   }
   document.querySelectorAll("[data-tool]").forEach(function (btn) {
     btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
   });
-  $("btnUndo").addEventListener("click", function () { drawings.pop(); render(); });
-  $("btnClearDraw").addEventListener("click", function () { drawings = []; draft = null; render(); });
+  $("btnUndo").addEventListener("click", function () {
+    if (sel >= 0) dropSel();
+    else { drawings.pop(); sel = -1; render(); }
+  });
+  $("btnClearDraw").addEventListener("click", function () { drawings = []; draft = null; sel = -1; render(); });
 
   function setZoom(n, anchorX) {
     var cap = Math.max(12, bars.length || 200);
@@ -742,16 +791,30 @@
     if (bars.length < 2) return;
     var p = pt(e);
     var z = zone(p.x, p.y);
-    if (tool !== "pan" && z === "plot") {
-      if (tool === "hline") {
-        drawings.push({ type: "hline", p: yToP(p.y) });
+    if (z === "plot") {
+      var hit = hitDraw(p);
+      if (tool === "del") {
+        if (hit >= 0) { sel = hit; dropSel(); }
+        return;
+      }
+      if (hit >= 0 && (tool === "pan" || sel === hit)) {
+        if (sel === hit) dropSel();
+        else { sel = hit; render(); }
+        return;
+      }
+      if (tool !== "pan") {
+        sel = -1;
+        if (tool === "hline") {
+          drawings.push({ type: "hline", p: yToP(p.y) });
+          sel = drawings.length - 1;
+          render();
+          return;
+        }
+        draft = { type: tool, t1: xToT(p.x), p1: yToP(p.y), t2: xToT(p.x), p2: yToP(p.y) };
+        drag = { kind: "draw", x: p.x, y: p.y };
         render();
         return;
       }
-      draft = { type: tool, t1: xToT(p.x), p1: yToP(p.y), t2: xToT(p.x), p2: yToP(p.y) };
-      drag = { kind: "draw", x: p.x, y: p.y };
-      render();
-      return;
     }
     drag = {
       kind: z === "price" ? "price" : z === "time" ? "time" : "pan",
@@ -768,6 +831,7 @@
       var z0 = zone(p.x, p.y);
       cv.classList.toggle("axis-y", tool === "pan" && z0 === "price");
       cv.classList.toggle("axis-x", tool === "pan" && z0 === "time");
+      cv.classList.toggle("erasing", tool === "del" || (z0 === "plot" && hitDraw(p) >= 0));
       if (lastCall) paintChart(lastCall);
       return;
     }
@@ -802,7 +866,10 @@
     if (drag && drag.kind === "draw" && draft) {
       var p = e ? pt(e) : hover;
       if (p) { draft.t2 = xToT(p.x); draft.p2 = yToP(p.y); }
-      if (Math.abs(draft.p1 - draft.p2) > 0.05 || Math.abs(draft.t1 - draft.t2) > 1) drawings.push(draft);
+      if (Math.abs(draft.p1 - draft.p2) > 0.05 || Math.abs(draft.t1 - draft.t2) > 1) {
+        drawings.push(draft);
+        sel = drawings.length - 1;
+      }
       draft = null;
     }
     drag = null;
@@ -834,8 +901,13 @@
   });
   window.addEventListener("resize", function () { render(); });
   window.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") { draft = null; setTool("pan"); render(); }
-    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey)) { drawings.pop(); render(); }
+    if (e.key === "Escape") { draft = null; sel = -1; setTool("pan"); render(); }
+    if (e.key === "Delete" || e.key === "Backspace") { dropSel(); }
+    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (sel >= 0) dropSel();
+      else { drawings.pop(); render(); }
+    }
   });
 
   refreshNow();
