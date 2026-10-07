@@ -114,7 +114,6 @@
         <div class="px" id="px">—</div>
         <div class="chg" id="chg">XAUUSD FX · Swissquote / MT5</div>
       </div>
-      <div class="meta" id="meta">Chưa có tick. Mở http://127.0.0.1:4180/ — file:// chết feed. Cần server kéo FX.</div>
     </div>
 
     <div class="call wait" id="call">
@@ -151,13 +150,6 @@
       </div>
       <canvas id="chart" width="1100" height="420"></canvas>
     </div>
-    <p class="hint">Kéo nến = pan (qua–lại / lên–xuống). Trục phải = zoom giá. Trục dưới = zoom thời gian. Line / Fib / HLine / Khung trên chart. Double-click về live.</p>
-    <div class="feeds" id="feeds"></div>
-    <p class="warn">Không phải tư vấn đầu tư. XAUUSD FX ≠ COMEX futures ≠ PAXG. Lệnh trên app này là nhận định luật (EMA / RSI / ATR), không gửi lệnh đi đâu. Pages gọi Worker FX pipe (CORS).</p>
-    <details>
-      <summary>Luật gọi lệnh</summary>
-      <p>Tick: Swissquote XAU/USD (mid elite), fallback biquote MT5. Nến sống = XAUUSD MT5. Lịch sử: 1D / 1W COMEX từ 2020; 1h / 4h COMEX ~2 năm (Yahoo không mở 1h từ 2020) + 1D lấp đuôi; 5m / 15m ~1 tháng. Số lớn = FX mid. PAXG / spot chỉ để so lệch. BUY khi EMA9 &gt; EMA21, giá trên EMA21, RSI 42–68. SELL ngược lại, RSI 32–58. RSI &gt; 70 hoặc &lt; 30 → WAIT. Spread FX vs PAXG &gt; $8 → call yếu. SL = 1.4×ATR, TP1 = 1.5R, TP2 = 2.5R. Local <b>http://127.0.0.1:4180/</b>. Pages gọi Worker.</p>
-    </details>
   </div>
 <script>
 (function () {
@@ -626,17 +618,8 @@
       el.className = "chg " + (diff >= 0 ? "up" : "dn");
       el.textContent = (diff >= 0 ? "+" : "") + n2(diff) + "  " + (diff >= 0 ? "+" : "") + pct.toFixed(2) + "%  vs open nến " + tfLabel();
     }
-    $("meta").innerHTML =
-      "XAUUSD FX <b>" + n2(fx) + "</b> (" + (fxSrc || "—") + ") lúc " + clock(fxAt) +
-      " · PAXG <b>" + n2(paxg) + "</b> · Spot <b>" + n2(spot) + "</b><br>" +
-      "Tick " + ago(fxAt) + " trước · nến " + ago(barAt) + " trước · " + bars.length + " nến " + tfLabel() +
-      (barSrc ? " · " + barSrc : "");
     paintCall(d);
     paintChart(d);
-    $("feeds").innerHTML =
-      "Feed: FX <b>" + (fx != null ? "OK" : "FAIL") + "</b> · nến MT5 <b>" + (bars.length ? "OK" : "FAIL") + "</b> · PAXG <b>" + (paxg != null ? "OK" : "FAIL") + "</b> · spot <b>" + (spot != null ? "OK" : "FAIL") + "</b>" +
-      (err ? " · " + err : "") +
-      " · Local 4180 hoặc Worker trên Pages.";
   }
 
   async function fetchTick() {
