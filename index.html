@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c1016" />
+  <title>XAUUSD Desk</title>
+  <style>
+    :root {
+      --bg: #0c1016;
+      --card: #141a22;
+      --line: #243040;
+      --ink: #e8edf4;
+      --mute: #8b97a8;
+      --gold: #e0b13a;
+      --up: #3dd68c;
+      --dn: #f36565;
+      --wait: #c9a227;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; }
+    body { min-height: 100vh; padding: 12px 12px calc(18px + env(safe-area-inset-bottom)); }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    header {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      padding: 6px 2px 12px;
+    }
+    header h1 { font-size: 18px; letter-spacing: .08em; font-weight: 700; }
+    header h1 span { color: var(--gold); }
+    .live { font-size: 11px; color: var(--mute); display: flex; align-items: center; gap: 6px; }
+    .live i { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; }
+    .live.on i { background: var(--up); box-shadow: 0 0 8px var(--up); }
+    .live.bad i { background: var(--dn); }
+    .price-row {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 22px;
+    }
+    .px { font-variant-numeric: tabular-nums; font-size: 40px; font-weight: 700; letter-spacing: -1px; line-height: 1; transition: color .2s; }
+    .chg { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+    .chg.up { color: var(--up); } .chg.dn { color: var(--dn); }
+    .meta { color: var(--mute); font-size: 12px; line-height: 1.45; }
+    .meta b { color: var(--ink); font-weight: 600; }
+    .call {
+      margin-top: 12px; border-radius: 14px; padding: 16px 18px; border: 1px solid var(--line);
+      background: #182018;
+    }
+    .call.buy { background: #10261c; border-color: #1e6b46; }
+    .call.sell { background: #2a1418; border-color: #7a2d33; }
+    .call.wait { background: #241e10; border-color: #6b5420; }
+    .call .tag {
+      display: inline-block; font-size: 13px; font-weight: 800; letter-spacing: .14em;
+      padding: 4px 10px; border-radius: 999px; margin-bottom: 8px;
+    }
+    .call.buy .tag { background: var(--up); color: #062; }
+    .call.sell .tag { background: var(--dn); color: #3a0008; }
+    .call.wait .tag { background: var(--wait); color: #2a1e00; }
+    .call h2 { font-size: 22px; margin-bottom: 6px; }
+    .call p, .why li { font-size: 14px; line-height: 1.45; color: #d5dbe6; }
+    .lvls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 4px; }
+    .lvls div { background: rgba(0,0,0,.25); border-radius: 10px; padding: 8px 10px; }
+    .lvls small { display: block; color: var(--mute); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .lvls b { font-variant-numeric: tabular-nums; font-size: 14px; }
+    .why { margin: 10px 0 0 18px; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .tools button {
+      background: var(--card); color: var(--ink); border: 1px solid var(--line);
+      border-radius: 999px; padding: 8px 14px; font: 700 13px inherit; cursor: pointer;
+    }
+    .tools button.on { background: var(--gold); color: #1a1404; border-color: var(--gold); }
+    .tools button:disabled { opacity: .55; cursor: wait; }
+    .px.flash { color: var(--gold); }
+    .chart-box { position: relative; user-select: none; }
+    canvas { width: 100%; height: 420px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; display: block; touch-action: none; cursor: grab; }
+    canvas.drawing { cursor: crosshair; }
+    canvas.axis-y { cursor: ns-resize; }
+    canvas.axis-x { cursor: ew-resize; }
+    canvas.grabbing { cursor: grabbing; }
+    .zoom {
+      position: absolute; top: 10px; right: 78px; display: flex; gap: 6px; z-index: 2;
+    }
+    .zoom button, .draw button {
+      border-radius: 10px; border: 1px solid var(--line);
+      background: rgba(20,26,34,.88); color: var(--ink); font: 700 12px inherit;
+      cursor: pointer; line-height: 1;
+    }
+    .zoom button { width: 34px; height: 34px; font-size: 16px; }
+    .zoom button:active, .draw button:active { background: var(--gold); color: #1a1404; }
+    .draw { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .draw button { padding: 8px 12px; border-radius: 999px; background: var(--card); }
+    .draw button.on { background: var(--gold); color: #1a1404; border-color: var(--gold); }
+    .hint { font-size: 11px; color: var(--mute); margin: 6px 2px 0; }
+    .feeds { margin-top: 10px; font-size: 12px; color: var(--mute); line-height: 1.5; }
+    .feeds b { color: var(--ink); }
+    .warn { margin-top: 12px; font-size: 12px; color: #b9a56a; line-height: 1.5; }
+    details { margin-top: 10px; color: var(--mute); font-size: 12px; }
+    details summary { cursor: pointer; color: var(--gold); }
+    details p { margin-top: 6px; line-height: 1.5; }
+    @media (max-width: 640px) {
+      .px { font-size: 32px; }
+      .lvls { grid-template-columns: 1fr 1fr; }
+      canvas { height: 320px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>XAU<span>USD</span> DESK</h1>
+      <div class="live" id="live"><i></i> <span id="liveTxt">đang nối feed…</span></div>
+    </header>
+
+    <div class="price-row">
+      <div>
+        <div class="px" id="px">—</div>
+        <div class="chg" id="chg">XAUUSD FX · Swissquote / MT5</div>
+      </div>
+      <div class="meta" id="meta">Chưa có tick. Mở http://127.0.0.1:4180/ — file:// chết feed. Cần server kéo FX.</div>
+    </div>
+
+    <div class="call wait" id="call">
+      <div class="tag" id="callTag">WAIT</div>
+      <h2 id="callTitle">Chưa đủ nến để gọi lệnh</h2>
+      <p id="callLead">Đang lấy giá spot và nến. Đây là bàn luật, không phải lệnh sàn.</p>
+      <div class="lvls" id="lvls" hidden></div>
+      <ul class="why" id="why"></ul>
+    </div>
+
+    <div class="tools">
+      <button type="button" data-tf="5m">5m</button>
+      <button type="button" data-tf="15m" class="on">15m</button>
+      <button type="button" data-tf="1h">1h</button>
+      <button type="button" data-tf="4h">4h</button>
+      <button type="button" data-tf="1d">1D</button>
+      <button type="button" data-tf="1w">1W</button>
+      <button type="button" id="btnRefresh">Refresh</button>
+    </div>
+    <div class="draw" id="drawBar">
+      <button type="button" data-tool="pan" class="on">Pan</button>
+      <button type="button" data-tool="line">Line</button>
+      <button type="button" data-tool="fib">Fib</button>
+      <button type="button" data-tool="hline">HLine</button>
+      <button type="button" data-tool="rect">Khung</button>
+      <button type="button" id="btnUndo">Undo</button>
+      <button type="button" id="btnClearDraw">Xóa kẻ</button>
+    </div>
+    <div class="chart-box">
+      <div class="zoom" aria-label="Thu phóng chart">
+        <button type="button" id="btnZoomIn" title="Phóng">＋</button>
+        <button type="button" id="btnZoomOut" title="Thu">－</button>
+        <button type="button" id="btnZoomReset" title="Reset">⌂</button>
+      </div>
+      <canvas id="chart" width="1100" height="420"></canvas>
+    </div>
+    <p class="hint">Kéo nến = pan (qua–lại / lên–xuống). Trục phải = zoom giá. Trục dưới = zoom thời gian. Line / Fib / HLine / Khung trên chart. Double-click về live.</p>
+    <div class="feeds" id="feeds"></div>
+    <p class="warn">Không phải tư vấn đầu tư. XAUUSD FX ≠ COMEX futures ≠ PAXG. Lệnh trên app này là nhận định luật (EMA / RSI / ATR), không gửi lệnh đi đâu. Pages gọi Worker FX pipe (CORS).</p>
+    <details>
+      <summary>Luật gọi lệnh</summary>
+      <p>Tick: Swissquote XAU/USD (mid elite), fallback biquote MT5. Nến sống = XAUUSD MT5. Lịch sử: 1D / 1W COMEX từ 2020; 1h / 4h COMEX ~2 năm (Yahoo không mở 1h từ 2020) + 1D lấp đuôi; 5m / 15m ~1 tháng. Số lớn = FX mid. PAXG / spot chỉ để so lệch. BUY khi EMA9 &gt; EMA21, giá trên EMA21, RSI 42–68. SELL ngược lại, RSI 32–58. RSI &gt; 70 hoặc &lt; 30 → WAIT. Spread FX vs PAXG &gt; $8 → call yếu. SL = 1.4×ATR, TP1 = 1.5R, TP2 = 2.5R. Local <b>http://127.0.0.1:4180/</b>. Pages gọi Worker.</p>
+    </details>
+  </div>
+<script>
+(function () {
+  var tf = "15m";
+  var bars = [];
+  var spot = null;
+  var paxg = null;
+  var fx = null;
+  var fxSrc = "";
+  var barSrc = "";
+  var spotAt = 0;
+  var paxgAt = 0;
+  var fxAt = 0;
+  var barAt = 0;
+  var err = "";
+  var tPrice = 0, tBar = 0;
+  var lastShown = null;
+  var refreshing = false;
+  var visN = 80;
+  var viewRight = -1;
+  var yLo = null;
+  var yHi = null;
+  var tool = "pan";
+  var drawings = [];
+  var draft = null;
+  var drag = null;
+  var hover = null;
+  var lastCall = null;
+  var layout = { left: 10, right: 72, top: 12, bot: 28, w: 0, h: 0, lo: 0, hi: 1, start: 0, end: 0, cw: 1 };
+  function apiBase() {
+    if (window.FX_PIPE) return window.FX_PIPE.replace(/\/$/, "");
+    if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+      if (location.port === "4180") return "";
+      return "http://127.0.0.1:4180";
+    }
+    return "https://xauusd-fx-pipe.tranchaungoclong.workers.dev";
+  }
+  var cv = document.getElementById("chart");
+  var ctx = cv.getContext("2d");
+
+  function $(id) { return document.getElementById(id); }
+  function n2(x) { return x == null || isNaN(x) ? "—" : Number(x).toFixed(2); }
+  function ago(ms) {
+    if (!ms) return "—";
+    var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 60) return s + "s";
+    return Math.round(s / 60) + "p";
+  }
+  function clock(ms) {
+    if (!ms) return "—";
+    var d = new Date(ms);
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  function tfLabel() {
+    if (tf === "1d") return "1D";
+    if (tf === "1w") return "1W";
+    return tf;
+  }
+  function interval() {
+    if (tf === "5m") return "5m";
+    if (tf === "1h") return "1h";
+    if (tf === "4h") return "4h";
+    if (tf === "1d") return "1d";
+    if (tf === "1w") return "1w";
+    return "15m";
+  }
+  function getJson(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function showPx(v) {
+    var el = $("px");
+    var s = n2(v);
+    if (lastShown != null && s !== lastShown) {
+      el.classList.remove("flash");
+      void el.offsetWidth;
+      el.classList.add("flash");
+      setTimeout(function () { el.classList.remove("flash"); }, 700);
+    }
+    lastShown = s;
+    el.textContent = s;
+  }
+
+  function ema(arr, period) {
+    var k = 2 / (period + 1);
+    var out = new Array(arr.length);
+    var seed = 0, n = 0, prev = null;
+    for (var i = 0; i < arr.length; i++) {
+      var v = arr[i];
+      if (i < period) {
+        seed += v; n++;
+        if (n === period) { prev = seed / period; out[i] = prev; }
+        else out[i] = null;
+      } else {
+        prev = v * k + prev * (1 - k);
+        out[i] = prev;
+      }
+    }
+    return out;
+  }
+  function rsi(closes, period) {
+    var out = new Array(closes.length).fill(null);
+    if (closes.length <= period) return out;
+    var g = 0, l = 0;
+    for (var i = 1; i <= period; i++) {
+      var d = closes[i] - closes[i - 1];
+      if (d >= 0) g += d; else l -= d;
+    }
+    g /= period; l /= period;
+    out[period] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+    for (var j = period + 1; j < closes.length; j++) {
+      var dj = closes[j] - closes[j - 1];
+      var gj = dj > 0 ? dj : 0;
+      var lj = dj < 0 ? -dj : 0;
+      g = (g * (period - 1) + gj) / period;
+      l = (l * (period - 1) + lj) / period;
+      out[j] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+    }
+    return out;
+  }
+  function atr(bs, period) {
+    var out = new Array(bs.length).fill(null);
+    if (bs.length <= period) return out;
+    var acc = 0;
+    for (var i = 1; i <= period; i++) {
+      var tr = Math.max(
+        bs[i].h - bs[i].l,
+        Math.abs(bs[i].h - bs[i - 1].c),
+        Math.abs(bs[i].l - bs[i - 1].c)
+      );
+      acc += tr;
+    }
+    var prev = acc / period;
+    out[period] = prev;
+    for (var j = period + 1; j < bs.length; j++) {
+      var trj = Math.max(
+        bs[j].h - bs[j].l,
+        Math.abs(bs[j].h - bs[j - 1].c),
+        Math.abs(bs[j].l - bs[j - 1].c)
+      );
+      prev = (prev * (period - 1) + trj) / period;
+      out[j] = prev;
+    }
+    return out;
+  }
+
+  function decide() {
+    if (bars.length < 30) {
+      return { side: "WAIT", title: "Chưa đủ nến", lead: "Cần ≥ 30 nến " + tf + " mới gọi được.", why: ["Feed nến chưa đủ.", "Không bịa hướng."], lvls: null, weak: true };
+    }
+    var closes = bars.map(function (b) { return b.c; });
+    var e9 = ema(closes, 9);
+    var e21 = ema(closes, 21);
+    var rs = rsi(closes, 14);
+    var at = atr(bars, 14);
+    var i = bars.length - 1;
+    var c = closes[i], a9 = e9[i], a21 = e21[i], r = rs[i], a = at[i];
+    var refPx = paxg != null ? paxg : spot;
+    var livePx = fx != null ? fx : refPx;
+    var spread = (livePx != null && refPx != null) ? Math.abs(livePx - refPx) : 0;
+    var weakSpread = spread > 8;
+    var why = [];
+    why.push("EMA9 " + n2(a9) + " vs EMA21 " + n2(a21) + (a9 > a21 ? " — trend lên" : a9 < a21 ? " — trend xuống" : " — dẹt"));
+    why.push("RSI14 = " + n2(r) + (r > 70 ? " — già mua" : r < 30 ? " — già bán" : " — chưa cực"));
+    why.push("ATR14 = " + n2(a) + (weakSpread ? " · FX vs PAXG lệch $" + n2(spread) + " — call yếu" : " · FX vs PAXG $" + n2(spread)));
+
+    var side = "WAIT";
+    var title = "WAIT — chưa rõ sóng";
+    var lead = "Không đủ điều kiện BUY/SELL trên khung " + tf + ".";
+    if (a9 != null && a21 != null && r != null && a != null) {
+      var up = a9 > a21 && c > a21;
+      var dn = a9 < a21 && c < a21;
+      if (r > 70 || r < 30) {
+        title = "WAIT — RSI cực, dễ đảo";
+        lead = "Sóng đã đi xa. Đợi RSI về 42–68 (mua) hoặc 32–58 (bán).";
+      } else if (up && r >= 42 && r <= 68 && c >= a9) {
+        side = "BUY";
+        title = "BUY — trend lên, RSI còn chỗ";
+        lead = "Nhận định long trên " + tf + ". Không phải lệnh sàn. Cắt nếu gãy dưới SL.";
+      } else if (dn && r >= 32 && r <= 58 && c <= a9) {
+        side = "SELL";
+        title = "SELL — trend xuống, RSI còn chỗ";
+        lead = "Nhận định short trên " + tf + ". Không phải lệnh sàn. Cắt nếu phá trên SL.";
+      } else {
+        lead = "Trend và RSI chưa cùng hướng. Đứng ngoài.";
+      }
+    }
+    if (weakSpread && side !== "WAIT") {
+      lead += " FX và PAXG đang lệch — giảm size hoặc WAIT.";
+    }
+    var lvls = null;
+    if (side !== "WAIT" && a) {
+      var sl = side === "BUY" ? c - 1.4 * a : c + 1.4 * a;
+      var rUnit = Math.abs(c - sl);
+      var tp1 = side === "BUY" ? c + 1.5 * rUnit : c - 1.5 * rUnit;
+      var tp2 = side === "BUY" ? c + 2.5 * rUnit : c - 2.5 * rUnit;
+      lvls = { entry: c, sl: sl, tp1: tp1, tp2: tp2 };
+    }
+    return { side: side, title: title, lead: lead, why: why, lvls: lvls, weak: weakSpread, e9: e9, e21: e21 };
+  }
+
+  function paintCall(d) {
+    var box = $("call");
+    box.className = "call " + d.side.toLowerCase();
+    $("callTag").textContent = d.side;
+    $("callTitle").textContent = d.title;
+    $("callLead").textContent = d.lead;
+    var ul = $("why");
+    ul.innerHTML = d.why.map(function (w) { return "<li>" + w + "</li>"; }).join("");
+    var lv = $("lvls");
+    if (!d.lvls) { lv.hidden = true; lv.innerHTML = ""; return; }
+    lv.hidden = false;
+    lv.innerHTML =
+      "<div><small>Entry</small><b>" + n2(d.lvls.entry) + "</b></div>" +
+      "<div><small>SL</small><b>" + n2(d.lvls.sl) + "</b></div>" +
+      "<div><small>TP1</small><b>" + n2(d.lvls.tp1) + "</b></div>" +
+      "<div><small>TP2</small><b>" + n2(d.lvls.tp2) + "</b></div>";
+  }
+
+  function rightIdx() {
+    if (viewRight < 0 || !bars.length) return Math.max(0, bars.length - 1);
+    return viewRight;
+  }
+  function visWindow() {
+    var n = Math.max(12, Math.min(visN, Math.max(12, bars.length || 12)));
+    var end = rightIdx();
+    var maxR = bars.length - 1 + n * 0.35;
+    var minR = Math.min(bars.length - 1, n - 1);
+    if (end > maxR) end = maxR;
+    if (end < minR) end = minR;
+    return { start: end - n + 1, end: end, n: n };
+  }
+  function dateLbl(ms) {
+    var d = new Date(ms);
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    if (tf === "1d" || tf === "1w") return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+    if (tf === "1h" || tf === "4h") return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + "h";
+    return p(d.getDate()) + "/" + p(d.getMonth() + 1) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function idxToX(i) {
+    return layout.left + (i - layout.start) * layout.cw + layout.cw / 2;
+  }
+  function xToIdx(x) {
+    return layout.start + (x - layout.left) / layout.cw;
+  }
+  function Y(v) {
+    return layout.top + (layout.hi - v) / (layout.hi - layout.lo) * (layout.h - layout.top - layout.bot);
+  }
+  function yToP(y) {
+    return layout.hi - (y - layout.top) / (layout.h - layout.top - layout.bot) * (layout.hi - layout.lo);
+  }
+  function tToX(t) {
+    if (bars.length < 2) return layout.left;
+    var i0 = 0;
+    for (var i = 1; i < bars.length; i++) {
+      if (bars[i].t >= t) { i0 = i - 1; break; }
+      i0 = i;
+    }
+    var a = bars[i0], b = bars[Math.min(i0 + 1, bars.length - 1)];
+    var f = b.t === a.t ? 0 : (t - a.t) / (b.t - a.t);
+    return idxToX(i0 + f);
+  }
+  function xToT(x) {
+    if (bars.length < 2) return 0;
+    var i = xToIdx(x);
+    var i0 = Math.max(0, Math.min(bars.length - 2, Math.floor(i)));
+    var f = i - i0;
+    var a = bars[i0], b = bars[i0 + 1];
+    return a.t + (b.t - a.t) * f;
+  }
+  function zone(x, y) {
+    if (x > layout.w - layout.right) return "price";
+    if (y > layout.h - layout.bot) return "time";
+    return "plot";
+  }
+
+  function paintChart(d) {
+    lastCall = d;
+    var w = cv.clientWidth || 1100;
+    var h = cv.clientHeight || 420;
+    if (cv.width !== w) cv.width = w;
+    if (cv.height !== h) cv.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#141a22";
+    ctx.fillRect(0, 0, w, h);
+    if (bars.length < 2) {
+      ctx.fillStyle = "#8b97a8";
+      ctx.font = "13px Segoe UI";
+      ctx.fillText("Chưa có nến", 16, 28);
+      return;
+    }
+    var vw = visWindow();
+    var i0 = Math.max(0, Math.floor(vw.start));
+    var i1 = Math.min(bars.length - 1, Math.ceil(vw.end));
+    var vis = bars.slice(i0, i1 + 1);
+    var lo = Infinity, hi = -Infinity;
+    vis.forEach(function (b) {
+      if (b.l > 0) lo = Math.min(lo, b.l);
+      if (b.h > 0) hi = Math.max(hi, b.h);
+    });
+    if (!(hi > lo)) { lo = 0; hi = 1; }
+    var pad = (hi - lo) * 0.08 || 1;
+    if (yLo == null || yHi == null || !(yHi > yLo)) {
+      yLo = lo - pad;
+      yHi = hi + pad;
+    }
+    lo = yLo;
+    hi = yHi;
+    var left = 10, right = 72, top = 12, bot = 28;
+    var cw = (w - left - right) / vw.n;
+    layout = { left: left, right: right, top: top, bot: bot, w: w, h: h, lo: lo, hi: hi, start: vw.start, end: vw.end, cw: cw, i0: i0, i1: i1 };
+
+    ctx.strokeStyle = "#243040";
+    ctx.beginPath();
+    for (var g = 0; g < 5; g++) {
+      var yy = top + g * (h - top - bot) / 4;
+      ctx.moveTo(left, yy); ctx.lineTo(w - right, yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#8b97a8";
+    ctx.font = "10px Segoe UI";
+    for (var gp = 0; gp < 5; gp++) {
+      var pv = hi - gp * (hi - lo) / 4;
+      var py = top + gp * (h - top - bot) / 4;
+      ctx.fillText(n2(pv), w - right + 6, py + 4);
+    }
+
+    var step = vis.length > 18 ? Math.ceil(vis.length / 8) : 1;
+    ctx.textAlign = "center";
+    for (var ti = 0; ti < vis.length; ti += step) {
+      var bx = idxToX(i0 + ti);
+      ctx.fillStyle = "#8b97a8";
+      ctx.fillText(dateLbl(vis[ti].t), bx, h - 8);
+    }
+    ctx.textAlign = "left";
+
+    vis.forEach(function (b, k) {
+      var i = i0 + k;
+      var x = idxToX(i);
+      var up = b.c >= b.o;
+      ctx.strokeStyle = up ? "#3dd68c" : "#f36565";
+      ctx.beginPath();
+      ctx.moveTo(x, Y(b.h)); ctx.lineTo(x, Y(b.l)); ctx.stroke();
+      var y1 = Y(Math.max(b.o, b.c)), y2 = Y(Math.min(b.o, b.c));
+      ctx.fillStyle = up ? "#3dd68c" : "#f36565";
+      ctx.fillRect(x - Math.max(1.2, cw * 0.32), y1, Math.max(2.4, cw * 0.64), Math.max(1, y2 - y1));
+    });
+    function eline(full, color) {
+      ctx.strokeStyle = color; ctx.lineWidth = 1.4; ctx.beginPath();
+      var started = false;
+      for (var i = i0; i <= i1; i++) {
+        var v = full[i];
+        if (v == null) continue;
+        var x = idxToX(i);
+        if (!started) { ctx.moveTo(x, Y(v)); started = true; }
+        else ctx.lineTo(x, Y(v));
+      }
+      ctx.stroke(); ctx.lineWidth = 1;
+    }
+    eline(d.e9 || [], "#e0b13a");
+    eline(d.e21 || [], "#8b97a8");
+    var last = vis[vis.length - 1].c;
+    ctx.strokeStyle = "#e0b13a";
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(left, Y(last)); ctx.lineTo(w - right, Y(last)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#e0b13a";
+    ctx.font = "11px Segoe UI";
+    ctx.fillText(n2(last), w - right + 6, Y(last) + 4);
+
+    paintDrawings();
+    if (hover && hover.x >= left && hover.x <= w - right && hover.y >= top && hover.y <= h - bot) {
+      ctx.strokeStyle = "rgba(232,237,244,.35)";
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(hover.x, top); ctx.lineTo(hover.x, h - bot);
+      ctx.moveTo(left, hover.y); ctx.lineTo(w - right, hover.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      var hi2 = Math.max(0, Math.min(bars.length - 1, Math.round(xToIdx(hover.x))));
+      var ht = bars[hi2] ? dateLbl(bars[hi2].t) : "";
+      ctx.fillStyle = "#0c1016";
+      ctx.fillRect(hover.x - 44, h - bot + 2, 88, 14);
+      ctx.fillStyle = "#e0b13a";
+      ctx.font = "10px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText(ht, hover.x, h - 6);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#0c1016";
+      ctx.fillRect(w - right + 2, hover.y - 8, 68, 16);
+      ctx.fillStyle = "#e0b13a";
+      ctx.fillText(n2(yToP(hover.y)), w - right + 6, hover.y + 4);
+    }
+  }
+
+  var FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+  function paintOne(obj, ghost) {
+    ctx.globalAlpha = ghost ? 0.7 : 1;
+    if (obj.type === "hline") {
+      var y = Y(obj.p);
+      ctx.strokeStyle = "#6ec8ff";
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(layout.left, y); ctx.lineTo(layout.w - layout.right, y); ctx.stroke();
+      ctx.fillStyle = "#6ec8ff";
+      ctx.font = "10px Segoe UI";
+      ctx.fillText(n2(obj.p), layout.left + 6, y - 4);
+    } else if (obj.type === "line") {
+      ctx.strokeStyle = "#6ec8ff";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(tToX(obj.t1), Y(obj.p1));
+      ctx.lineTo(tToX(obj.t2), Y(obj.p2));
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    } else if (obj.type === "rect") {
+      var x1 = tToX(obj.t1), x2 = tToX(obj.t2);
+      var y1 = Y(obj.p1), y2 = Y(obj.p2);
+      ctx.fillStyle = "rgba(46,120,230,.16)";
+      ctx.strokeStyle = "#2e78e6";
+      ctx.lineWidth = 1.6;
+      ctx.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+      ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+      ctx.lineWidth = 1;
+    } else if (obj.type === "fib") {
+      var xa = tToX(obj.t1), xb = tToX(obj.t2);
+      var pLo = Math.min(obj.p1, obj.p2), pHi = Math.max(obj.p1, obj.p2);
+      var span = pHi - pLo || 1;
+      FIB.forEach(function (lv) {
+        var p = obj.p1 > obj.p2 ? obj.p1 - span * lv : obj.p1 + span * lv;
+        var y = Y(p);
+        ctx.strokeStyle = lv === 0.618 || lv === 0.382 ? "#e0b13a" : "rgba(110,200,255,.85)";
+        ctx.beginPath();
+        ctx.moveTo(Math.min(xa, xb), y);
+        ctx.lineTo(Math.max(xa, xb) + 40, y);
+        ctx.stroke();
+        ctx.fillStyle = "#c9d4e3";
+        ctx.font = "10px Segoe UI";
+        ctx.fillText((lv * 100).toFixed(1) + "%  " + n2(p), Math.max(xa, xb) + 6, y - 3);
+      });
+    }
+    ctx.globalAlpha = 1;
+  }
+  function paintDrawings() {
+    drawings.forEach(function (o) { paintOne(o, false); });
+    if (draft) paintOne(draft, true);
+  }
+
+  function render() {
+    var d = decide();
+    var live = $("live");
+    var ok = fx != null && bars.length > 0;
+    live.className = "live " + (ok ? "on" : err ? "bad" : "");
+    $("liveTxt").textContent = refreshing
+      ? "đang lấy tick…"
+      : (ok ? ("LIVE · " + tfLabel() + " · " + clock(fxAt)) : (err || "đang nối feed…"));
+    var px = fx != null ? fx : (paxg != null ? paxg : spot);
+    if (px != null) {
+      showPx(px);
+      var ref = bars.length ? bars[bars.length - 1].o : px;
+      var diff = px - ref;
+      var pct = ref ? (diff / ref) * 100 : 0;
+      var el = $("chg");
+      el.className = "chg " + (diff >= 0 ? "up" : "dn");
+      el.textContent = (diff >= 0 ? "+" : "") + n2(diff) + "  " + (diff >= 0 ? "+" : "") + pct.toFixed(2) + "%  vs open nến " + tfLabel();
+    }
+    $("meta").innerHTML =
+      "XAUUSD FX <b>" + n2(fx) + "</b> (" + (fxSrc || "—") + ") lúc " + clock(fxAt) +
+      " · PAXG <b>" + n2(paxg) + "</b> · Spot <b>" + n2(spot) + "</b><br>" +
+      "Tick " + ago(fxAt) + " trước · nến " + ago(barAt) + " trước · " + bars.length + " nến " + tfLabel() +
+      (barSrc ? " · " + barSrc : "");
+    paintCall(d);
+    paintChart(d);
+    $("feeds").innerHTML =
+      "Feed: FX <b>" + (fx != null ? "OK" : "FAIL") + "</b> · nến MT5 <b>" + (bars.length ? "OK" : "FAIL") + "</b> · PAXG <b>" + (paxg != null ? "OK" : "FAIL") + "</b> · spot <b>" + (spot != null ? "OK" : "FAIL") + "</b>" +
+      (err ? " · " + err : "") +
+      " · Local 4180 hoặc Worker trên Pages.";
+  }
+
+  async function fetchTick() {
+    var j = await getJson(apiBase() + "/api/tick");
+    if (j.fx && isFinite(j.fx.mid)) {
+      fx = j.fx.mid;
+      fxAt = Date.now();
+      fxSrc = j.fx.source || "fx";
+    }
+    if (typeof j.paxg === "number" && isFinite(j.paxg)) {
+      paxg = j.paxg;
+      paxgAt = Date.now();
+    }
+    if (typeof j.spot === "number" && isFinite(j.spot)) {
+      spot = j.spot;
+      spotAt = Date.now();
+    }
+    if (fx == null) throw new Error((j.err && j.err.join(" · ")) || "fx empty");
+  }
+  async function fetchBars() {
+    var j = await getJson(apiBase() + "/api/klines?interval=" + interval());
+    if (!j || !j.bars || !j.bars.length) throw new Error("kline empty");
+    bars = j.bars.map(function (k) {
+      return { t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c };
+    }).filter(function (b) {
+      return b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0 && b.h >= b.l;
+    });
+    barAt = Date.now();
+    barSrc = j.source || "mt5";
+  }
+
+  async function tickPrice() {
+    try {
+      await fetchTick();
+      err = bars.length ? "" : err;
+    } catch (e) {
+      err = String(e.message || e);
+    }
+    render();
+  }
+  async function tickBars() {
+    var oldLen = bars.length;
+    try {
+      await fetchBars();
+      err = fx == null ? err : "";
+      if (viewRight >= 0 && bars.length > oldLen) viewRight += (bars.length - oldLen);
+    } catch (e) {
+      err = String(e.message || e);
+    }
+    render();
+  }
+  async function refreshNow() {
+    if (refreshing) return;
+    refreshing = true;
+    var btn = $("btnRefresh");
+    btn.disabled = true;
+    btn.textContent = "Đang lấy…";
+    render();
+    try {
+      await Promise.all([tickPrice(), tickBars()]);
+    } finally {
+      refreshing = false;
+      btn.disabled = false;
+      btn.textContent = "Refresh";
+      render();
+    }
+  }
+
+  document.querySelectorAll("[data-tf]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      tf = btn.getAttribute("data-tf");
+      document.querySelectorAll("[data-tf]").forEach(function (b) { b.classList.toggle("on", b === btn); });
+      viewRight = -1;
+      visN = 80;
+      yLo = null;
+      yHi = null;
+      tickBars();
+    });
+  });
+  $("btnRefresh").addEventListener("click", refreshNow);
+  function setTool(name) {
+    tool = name;
+    draft = null;
+    cv.classList.toggle("drawing", name !== "pan");
+    document.querySelectorAll("[data-tool]").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-tool") === name);
+    });
+  }
+  document.querySelectorAll("[data-tool]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
+  });
+  $("btnUndo").addEventListener("click", function () { drawings.pop(); render(); });
+  $("btnClearDraw").addEventListener("click", function () { drawings = []; draft = null; render(); });
+
+  function setZoom(n, anchorX) {
+    var cap = Math.max(12, bars.length || 200);
+    var old = visN;
+    visN = Math.max(12, Math.min(n, cap));
+    if (anchorX != null && bars.length) {
+      var i = xToIdx(anchorX);
+      var end = rightIdx();
+      var frac = (i - (end - old + 1)) / old;
+      viewRight = i + visN * (1 - frac) - 1;
+      if (viewRight >= bars.length - 1.05) viewRight = -1;
+    }
+    render();
+  }
+  $("btnZoomIn").addEventListener("click", function () { setZoom(Math.round(visN * 0.55)); });
+  $("btnZoomOut").addEventListener("click", function () { setZoom(Math.round(visN * 1.9)); });
+  $("btnZoomReset").addEventListener("click", function () {
+    visN = 80; viewRight = -1; yLo = null; yHi = null; render();
+  });
+
+  function pt(e) {
+    var r = cv.getBoundingClientRect();
+    var src = (e.touches && e.touches[0]) || e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+  function startDrag(e) {
+    if (bars.length < 2) return;
+    var p = pt(e);
+    var z = zone(p.x, p.y);
+    if (tool !== "pan" && z === "plot") {
+      if (tool === "hline") {
+        drawings.push({ type: "hline", p: yToP(p.y) });
+        render();
+        return;
+      }
+      draft = { type: tool, t1: xToT(p.x), p1: yToP(p.y), t2: xToT(p.x), p2: yToP(p.y) };
+      drag = { kind: "draw", x: p.x, y: p.y };
+      render();
+      return;
+    }
+    drag = {
+      kind: z === "price" ? "price" : z === "time" ? "time" : "pan",
+      x: p.x, y: p.y,
+      visN: visN, viewRight: rightIdx(),
+      lo: layout.lo, hi: layout.hi, h: layout.h, cw: layout.cw
+    };
+    cv.classList.add("grabbing");
+  }
+  function moveDrag(e) {
+    var p = pt(e);
+    hover = p;
+    if (!drag) {
+      var z0 = zone(p.x, p.y);
+      cv.classList.toggle("axis-y", tool === "pan" && z0 === "price");
+      cv.classList.toggle("axis-x", tool === "pan" && z0 === "time");
+      if (lastCall) paintChart(lastCall);
+      return;
+    }
+    var dx = p.x - drag.x;
+    var dy = p.y - drag.y;
+    if (drag.kind === "draw" && draft) {
+      draft.t2 = xToT(p.x);
+      draft.p2 = yToP(p.y);
+      render();
+      return;
+    }
+    if (drag.kind === "price") {
+      var f = Math.pow(1.012, dy);
+      var mid = (drag.lo + drag.hi) / 2;
+      var rng = Math.max(0.5, (drag.hi - drag.lo) * f);
+      yLo = mid - rng / 2;
+      yHi = mid + rng / 2;
+    } else if (drag.kind === "time") {
+      var f2 = Math.pow(1.012, -dx);
+      visN = Math.max(12, Math.min(bars.length, drag.visN * f2));
+    } else {
+      viewRight = drag.viewRight - dx / (drag.cw || 1);
+      if (viewRight >= bars.length - 1.02) viewRight = -1;
+      var plotH = (drag.h - layout.top - layout.bot) || 1;
+      var dP = dy * ((drag.hi - drag.lo) / plotH);
+      yLo = drag.lo - dP;
+      yHi = drag.hi - dP;
+    }
+    render();
+  }
+  function endDrag(e) {
+    if (drag && drag.kind === "draw" && draft) {
+      var p = e ? pt(e) : hover;
+      if (p) { draft.t2 = xToT(p.x); draft.p2 = yToP(p.y); }
+      if (Math.abs(draft.p1 - draft.p2) > 0.05 || Math.abs(draft.t1 - draft.t2) > 1) drawings.push(draft);
+      draft = null;
+    }
+    drag = null;
+    cv.classList.remove("grabbing");
+    render();
+  }
+  cv.addEventListener("mousedown", startDrag);
+  window.addEventListener("mousemove", moveDrag);
+  window.addEventListener("mouseup", endDrag);
+  cv.addEventListener("touchstart", function (e) { e.preventDefault(); startDrag(e); }, { passive: false });
+  window.addEventListener("touchmove", function (e) { if (drag) { e.preventDefault(); moveDrag(e); } }, { passive: false });
+  window.addEventListener("touchend", endDrag);
+  cv.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var z = zone(e.offsetX, e.offsetY);
+    if (z === "price") {
+      var f = e.deltaY < 0 ? 0.9 : 1.1;
+      var mid = (yLo + yHi) / 2;
+      var rng = Math.max(0.5, (yHi - yLo) * f);
+      yLo = mid - rng / 2;
+      yHi = mid + rng / 2;
+      render();
+    } else {
+      setZoom(e.deltaY < 0 ? Math.round(visN * 0.85) : Math.round(visN * 1.18), e.offsetX);
+    }
+  }, { passive: false });
+  cv.addEventListener("dblclick", function () {
+    visN = 80; viewRight = -1; yLo = null; yHi = null; render();
+  });
+  window.addEventListener("resize", function () { render(); });
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { draft = null; setTool("pan"); render(); }
+    if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey)) { drawings.pop(); render(); }
+  });
+
+  refreshNow();
+  tPrice = setInterval(tickPrice, 5000);
+  tBar = setInterval(tickBars, 20000);
+})();
+</script>
+</body>
+</html>
