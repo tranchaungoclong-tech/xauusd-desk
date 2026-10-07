@@ -876,8 +876,8 @@
       viewRight = drag.viewRight - dx / (drag.cw || 1);
       var plotH = (drag.h - layout.top - layout.bot) || 1;
       var dP = dy * ((drag.hi - drag.lo) / plotH);
-      yLo = drag.lo - dP;
-      yHi = drag.hi - dP;
+      yLo = drag.lo + dP;
+      yHi = drag.hi + dP;
     }
     render();
   }
