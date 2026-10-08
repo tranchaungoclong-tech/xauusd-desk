@@ -218,6 +218,11 @@
 
     <div class="coach" id="chatBox">
       <h3>NÓI VỚI ẢNH</h3>
+      <div class="tools" id="chatModels">
+        <button type="button" data-model="moondream" class="on">Moondream</button>
+        <button type="button" data-model="llama">Llama</button>
+        <button type="button" data-model="llava">LLaVA</button>
+      </div>
       <div class="reply" id="chatLog"></div>
       <textarea id="chatIn" maxlength="1500" placeholder="Gửi ảnh line của cao thủ, rồi hỏi. Ví dụ: vùng nào, hướng nào."></textarea>
       <div class="row">
@@ -1078,6 +1083,15 @@
   });
   var chatHist = [];
   var chatImg = "";
+  var chatModel = "moondream";
+  document.querySelectorAll("[data-model]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      chatModel = btn.getAttribute("data-model");
+      document.querySelectorAll("[data-model]").forEach(function (b) {
+        b.classList.toggle("on", b === btn);
+      });
+    });
+  });
   function addChat(who, text) {
     var p = document.createElement("p");
     p.className = who;
@@ -1117,7 +1131,7 @@
     $("chatIn").value = "";
     btn.disabled = true;
     $("chatSt").textContent = "Đang đọc…";
-    postJson(apiBase() + "/api/chat", { text: say, image: sentImg, history: chatHist }).then(function (r) {
+    postJson(apiBase() + "/api/chat", { text: say, image: sentImg, history: chatHist, model: chatModel }).then(function (r) {
       if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "lỗi");
       chatHist.push({ role: "user", content: say || "(ảnh chart)" });
       chatHist.push({ role: "assistant", content: r.j.reply });

@@ -107,31 +107,44 @@ export default {
         const body = await readBody(req);
         const say = String(body.text || "").trim().slice(0, 1500);
         const img = String(body.image || "");
+        const who = String(body.model || "llama");
         if (!say && !img) return json({ ok: false, err: ["empty"] }, 400);
         if (img && img.length > 1800000) return json({ ok: false, err: ["ảnh quá nặng, chụp lại nhỏ hơn"] }, 400);
-        const hist = Array.isArray(body.history) ? body.history.slice(-8) : [];
-        const messages = [{
-          role: "system",
-          content: "Bạn nói tiếng Việt, ngắn, như người xem chart vàng với Philip. Anh ấy gửi ảnh line/fib/khung của cao thủ. Mô tả đúng những gì thấy: hướng line, vùng giá nếu đọc được, fib, khung. Không bịa giá không có trên ảnh. Không phải lệnh sàn, không bảo anh ấy all-in. Nếu ảnh mờ thì nói mờ."
-        }];
-        hist.forEach(function (m) {
-          if (!m || (m.role !== "user" && m.role !== "assistant")) return;
-          const c = String(m.content || "").trim().slice(0, 800);
-          if (c) messages.push({ role: m.role, content: c });
-        });
-        const user = { role: "user", content: say || "Đọc ảnh chart này. Kẻ gì, hướng nào, vùng giá nào đọc được." };
-        if (img.indexOf("base64,") > 0) {
-          const bytes = Uint8Array.from(atob(img.split("base64,")[1]), function (c) { return c.charCodeAt(0); });
-          user.image = [...bytes];
+        const ask = say || "Đọc ảnh chart này. Kẻ gì, hướng nào, vùng giá nào đọc được.";
+        const rule = " Trả lời tiếng Việt, ngắn. Không bịa giá không có trên ảnh. Không phải lệnh sàn. Ảnh mờ thì nói mờ.";
+        const hist = Array.isArray(body.history) ? body.history.slice(-6) : [];
+        let out;
+        if (who === "moondream") {
+          if (img.indexOf("base64,") < 0) return json({ ok: false, err: ["Moondream cần ảnh"] }, 400);
+          out = await env.AI.run("@cf/moondream/moondream3.1-9B-A2B", {
+            task: "query",
+            image: img,
+            question: ask + rule
+          });
+        } else {
+          const messages = [{
+            role: "system",
+            content: "Bạn nói tiếng Việt, ngắn, như người xem chart vàng với Philip. Ảnh là line/fib/khung của cao thủ. Mô tả đúng những gì thấy. Không bịa giá. Không phải lệnh sàn. Ảnh mờ thì nói mờ."
+          }];
+          hist.forEach(function (m) {
+            if (!m || (m.role !== "user" && m.role !== "assistant")) return;
+            const c = String(m.content || "").trim().slice(0, 800);
+            if (c) messages.push({ role: m.role, content: c });
+          });
+          const user = { role: "user", content: ask };
+          if (img.indexOf("base64,") > 0) {
+            const bytes = Uint8Array.from(atob(img.split("base64,")[1]), function (c) { return c.charCodeAt(0); });
+            user.image = [...bytes];
+          }
+          messages.push(user);
+          const id = who === "llava"
+            ? "@cf/llava-hf/llava-1.5-7b-hf"
+            : "@cf/meta/llama-3.2-11b-vision-instruct";
+          out = await env.AI.run(id, { messages: messages, max_tokens: 500 });
         }
-        messages.push(user);
-        const out = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-          messages: messages,
-          max_tokens: 500
-        });
-        const reply = (out && (out.response || out.description)) || "";
+        const reply = (out && (out.response || out.description || out.answer)) || "";
         if (!reply) return json({ ok: false, err: ["model rỗng"] }, 502);
-        return json({ ok: true, reply: String(reply).slice(0, 4000) });
+        return json({ ok: true, reply: String(reply).slice(0, 4000), model: who });
       }
       if (path === "/api/advise" && req.method === "POST") {
         const body = await readBody(req);
