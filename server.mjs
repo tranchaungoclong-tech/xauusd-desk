@@ -8,6 +8,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchTick, fetchBars, ALLOWED, jsonHeaders } from "./feed.mjs";
+import { readPack, addNote, writePack } from "./notes-store.mjs";
+import { snapshotFrom, askClaude } from "./advise.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const HOST = "127.0.0.1";
@@ -60,11 +62,19 @@ const server = http.createServer(function (req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-methods": "GET, POST, OPTIONS",
       "access-control-allow-headers": "*"
     });
     res.end();
     return;
+  }
+  function readJson(cb) {
+    const chunks = [];
+    req.on("data", function (c) { chunks.push(c); });
+    req.on("end", function () {
+      try { cb(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}")); }
+      catch (e) { cb({}); }
+    });
   }
   const u = new URL(req.url, "http://127.0.0.1");
   if (u.pathname === "/api/tick") {
@@ -85,7 +95,48 @@ const server = http.createServer(function (req, res) {
     return;
   }
   if (u.pathname === "/api/health") {
-    jsonRes(res, 200, { ok: true, port: PORT });
+    jsonRes(res, 200, {
+      ok: true,
+      port: PORT,
+      notes: true,
+      advise: !!process.env.ANTHROPIC_API_KEY
+    });
+    return;
+  }
+  if (u.pathname === "/api/notes" && req.method === "GET") {
+    const pack = readPack();
+    jsonRes(res, 200, { ok: true, notes: pack.notes, lastAdvise: pack.lastAdvise, at: pack.at });
+    return;
+  }
+  if (u.pathname === "/api/notes" && req.method === "POST") {
+    readJson(function (body) {
+      try {
+        const pack = addNote(body.text || body.note);
+        jsonRes(res, 200, { ok: true, notes: pack.notes, lastAdvise: pack.lastAdvise, at: pack.at });
+      } catch (e) {
+        jsonRes(res, 400, { ok: false, err: [String(e.message || e)] });
+      }
+    });
+    return;
+  }
+  if (u.pathname === "/api/advise" && req.method === "POST") {
+    readJson(function (body) {
+      const pack = readPack();
+      const snap = snapshotFrom({
+        tf: body.tf,
+        fx: body.fx,
+        decide: body.decide,
+        notes: pack.notes
+      });
+      askClaude(process.env.ANTHROPIC_API_KEY, snap).then(function (text) {
+        pack.lastAdvise = text;
+        pack.at = Date.now();
+        writePack(pack);
+        jsonRes(res, 200, { ok: true, advise: text, notes: pack.notes, at: pack.at });
+      }).catch(function (e) {
+        jsonRes(res, 502, { ok: false, err: [String(e.message || e)] });
+      });
+    });
     return;
   }
   serveFile(req, res, u.pathname);

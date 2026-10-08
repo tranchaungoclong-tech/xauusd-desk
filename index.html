@@ -96,6 +96,29 @@
     details { margin-top: 10px; color: var(--mute); font-size: 12px; }
     details summary { cursor: pointer; color: var(--gold); }
     details p { margin-top: 6px; line-height: 1.5; }
+    .coach {
+      margin-top: 12px; background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 14px 16px;
+    }
+    .coach h3 { font-size: 13px; letter-spacing: .1em; color: var(--gold); margin-bottom: 8px; }
+    .coach textarea {
+      width: 100%; min-height: 72px; resize: vertical; background: #0c1016; color: var(--ink);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 14px inherit;
+    }
+    .coach .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .coach .row button {
+      background: var(--gold); color: #1a1404; border: 0; border-radius: 999px;
+      padding: 8px 14px; font: 700 13px inherit; cursor: pointer;
+    }
+    .coach .row button.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+    .coach .row button:disabled { opacity: .55; cursor: wait; }
+    .coach .st { font-size: 11px; color: var(--mute); margin-top: 8px; }
+    .coach ul { margin: 8px 0 0 18px; font-size: 13px; line-height: 1.45; color: #d5dbe6; }
+    .coach .reply {
+      margin-top: 10px; white-space: pre-wrap; font-size: 14px; line-height: 1.5;
+      color: #d5dbe6; background: rgba(0,0,0,.22); border-radius: 10px; padding: 10px 12px;
+    }
+    .coach .reply:empty { display: none; }
     @media (max-width: 640px) {
       .px { font-size: 32px; }
       .lvls { grid-template-columns: 1fr 1fr; }
@@ -151,6 +174,18 @@
         <button type="button" id="btnZoomReset" title="Reset">⌂</button>
       </div>
       <canvas id="chart" width="1100" height="420"></canvas>
+    </div>
+
+    <div class="coach">
+      <h3>NOTES · ADVISE</h3>
+      <textarea id="noteIn" maxlength="800" placeholder="Ghi nhận định / lỗi / setup hôm nay. Lưu vào pipe. Advise đọc notes + rule call."></textarea>
+      <div class="row">
+        <button type="button" id="btnSaveNote">Lưu note</button>
+        <button type="button" class="ghost" id="btnAdvise">Advise</button>
+      </div>
+      <div class="st" id="noteSt">Notes lưu trên pipe — không phải lệnh sàn.</div>
+      <ul id="noteList"></ul>
+      <div class="reply" id="adviseOut"></div>
     </div>
   </div>
 <script>
@@ -763,6 +798,71 @@
     });
   });
   $("btnRefresh").addEventListener("click", refreshNow);
+
+  var notes = [];
+  var lastAdvise = "";
+  function paintNotes() {
+    var ul = $("noteList");
+    var last = notes.slice(-12).reverse();
+    ul.innerHTML = last.map(function (n) {
+      var when = n.t ? clock(n.t) : "";
+      return "<li>" + (when ? when + " · " : "") + String(n.text || "").replace(/[<>&]/g, function (c) {
+        return c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;";
+      }) + "</li>";
+    }).join("");
+    $("adviseOut").textContent = lastAdvise || "";
+  }
+  function loadNotes() {
+    getJson(apiBase() + "/api/notes").then(function (j) {
+      if (!j || !j.ok) return;
+      notes = j.notes || [];
+      lastAdvise = j.lastAdvise || "";
+      paintNotes();
+    }).catch(function () {});
+  }
+  function postJson(url, body) {
+    return fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (j) { return { okHttp: r.ok, j: j }; }); });
+  }
+  $("btnSaveNote").addEventListener("click", function () {
+    var text = ($("noteIn").value || "").trim();
+    if (!text) { $("noteSt").textContent = "Gõ note trước."; return; }
+    var btn = $("btnSaveNote");
+    btn.disabled = true;
+    postJson(apiBase() + "/api/notes", { text: text }).then(function (r) {
+      if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "save fail");
+      notes = r.j.notes || [];
+      lastAdvise = r.j.lastAdvise || lastAdvise;
+      $("noteIn").value = "";
+      $("noteSt").textContent = "Đã lưu · " + notes.length + " notes";
+      paintNotes();
+    }).catch(function (e) {
+      $("noteSt").textContent = String(e.message || e);
+    }).then(function () { btn.disabled = false; });
+  });
+  $("btnAdvise").addEventListener("click", function () {
+    var btn = $("btnAdvise");
+    btn.disabled = true;
+    $("noteSt").textContent = "Đang advise…";
+    var d = decide();
+    postJson(apiBase() + "/api/advise", {
+      tf: tf,
+      fx: fx,
+      decide: { side: d.side, title: d.title, lead: d.lead, why: d.why, lvls: d.lvls }
+    }).then(function (r) {
+      if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "advise fail");
+      lastAdvise = r.j.advise || "";
+      if (r.j.notes) notes = r.j.notes;
+      $("noteSt").textContent = "Advise xong · không phải lệnh sàn";
+      paintNotes();
+    }).catch(function (e) {
+      $("noteSt").textContent = String(e.message || e);
+    }).then(function () { btn.disabled = false; });
+  });
+  loadNotes();
   function setTool(name) {
     if (name !== "pan" && name === tool) name = "pan";
     tool = name;
