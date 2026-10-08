@@ -116,11 +116,20 @@ export default {
         let out;
         if (who === "moondream") {
           if (img.indexOf("base64,") < 0) return json({ ok: false, err: ["Moondream cần ảnh"] }, 400);
-          out = await env.AI.run("@cf/moondream/moondream3.1-9B-A2B", {
-            task: "query",
-            image: img,
-            question: ask + rule
+          const b64 = img.split("base64,")[1];
+          const bin = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0); });
+          const kind = img.indexOf("image/png") > 0 ? "image/png" : "image/jpeg";
+          const form = new FormData();
+          form.append("task", "query");
+          form.append("question", ask + rule);
+          form.append("image", new Blob([bin], { type: kind }), "chart.jpg");
+          const res = await fetch("https://api.cloudflare.com/client/v4/accounts/" + env.CF_ACCOUNT + "/ai/run/@cf/moondream/moondream3.1-9B-A2B", {
+            method: "POST",
+            headers: { authorization: "Bearer " + env.CF_TOKEN },
+            body: form
           });
+          const j = await res.json();
+          out = j.result || j;
         } else {
           const messages = [{
             role: "system",
@@ -133,17 +142,26 @@ export default {
           });
           const user = { role: "user", content: ask };
           if (img.indexOf("base64,") > 0) {
-            const bytes = Uint8Array.from(atob(img.split("base64,")[1]), function (c) { return c.charCodeAt(0); });
-            user.image = [...bytes];
+            const raw = img.split("base64,")[1];
+            if (who === "llava") user.data = raw;
+            else user.image = [...Uint8Array.from(atob(raw), function (c) { return c.charCodeAt(0); })];
           }
           messages.push(user);
           const id = who === "llava"
             ? "@cf/llava-hf/llava-1.5-7b-hf"
             : "@cf/meta/llama-3.2-11b-vision-instruct";
-          out = await env.AI.run(id, { messages: messages, max_tokens: 500 });
+          try {
+            out = await env.AI.run(id, { messages: messages, max_tokens: 500 });
+          } catch (err) {
+            const msg = String(err && err.message || err);
+            if (who !== "llava" && /agree/i.test(msg)) {
+              try { await env.AI.run(id, { prompt: "agree" }); } catch (e2) { /* agree itself throws */ }
+              out = await env.AI.run(id, { messages: messages, max_tokens: 500 });
+            } else throw err;
+          }
         }
         const reply = (out && (out.response || out.description || out.answer)) || "";
-        if (!reply) return json({ ok: false, err: ["model rỗng"] }, 502);
+        if (!reply) return json({ ok: false, err: ["model rỗng", JSON.stringify(out).slice(0, 240)] }, 502);
         return json({ ok: true, reply: String(reply).slice(0, 4000), model: who });
       }
       if (path === "/api/advise" && req.method === "POST") {
@@ -165,7 +183,7 @@ export default {
       }
       return json({ ok: false, err: ["not found"] }, 404);
     } catch (e) {
-      return json({ ok: false, err: [String(e.message || e)] }, 502);
+      return json({ ok: false, err: [String(e && e.message || e), String(e && e.stack || "").split("\n")[0]] }, 502);
     }
   }
 };
