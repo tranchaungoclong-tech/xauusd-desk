@@ -93,10 +93,14 @@ export function upsertDay(body) {
   });
   var hit = pack.days.find(function (x) { return x.day === day; });
   if (!hit) {
-    hit = { day: day, text: "", photos: [], t: Date.now() };
+    hit = { day: day, text: "", lines: [], photos: [], trades: [], t: Date.now() };
     pack.days.push(hit);
   }
-  if (text) hit.text = hit.text ? hit.text + "\n" + text : text;
+  hit.lines = hit.lines || [];
+  if (text) {
+    hit.lines.push({ t: Date.now(), text: text });
+    hit.text = hit.lines.map(function (l) { return l.text; }).join("\n");
+  }
   hit.photos = (hit.photos || []).concat(saved).slice(-MAX_PHOTOS);
   var trade = body.trade;
   if (trade && (trade.side === "BUY" || trade.side === "SELL") && isFinite(Number(trade.entry))) {
@@ -117,7 +121,7 @@ export function upsertDay(body) {
 
 export function publicDays(pack) {
   return (pack.days || []).map(function (d) {
-    return { day: d.day, text: d.text, photos: d.photos || [], trades: d.trades || [], t: d.t || 0 };
+    return { day: d.day, text: d.text, lines: d.lines || [], photos: d.photos || [], trades: d.trades || [], t: d.t || 0 };
   });
 }
 

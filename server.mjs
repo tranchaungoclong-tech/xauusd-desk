@@ -78,7 +78,7 @@ const server = http.createServer(function (req, res) {
   }
   const u = new URL(req.url, "http://127.0.0.1");
   if (u.pathname === "/api/tick") {
-    fetchTick().then(function (d) { jsonRes(res, d.ok ? 200 : 502, d); }).catch(function (e) {
+    fetchTick(u.searchParams.get("sym") || "XAUUSD").then(function (d) { jsonRes(res, d.ok ? 200 : 502, d); }).catch(function (e) {
       jsonRes(res, 502, { ok: false, err: [String(e.message || e)] });
     });
     return;
@@ -89,7 +89,7 @@ const server = http.createServer(function (req, res) {
       jsonRes(res, 400, { ok: false, err: ["bad interval"] });
       return;
     }
-    fetchBars(iv).then(function (d) { jsonRes(res, d.ok ? 200 : 502, d); }).catch(function (e) {
+    fetchBars(iv, u.searchParams.get("sym") || "XAUUSD").then(function (d) { jsonRes(res, d.ok ? 200 : 502, d); }).catch(function (e) {
       jsonRes(res, 502, { ok: false, err: [String(e.message || e)] });
     });
     return;

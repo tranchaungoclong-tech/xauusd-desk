@@ -49,13 +49,13 @@ export default {
     const path = u.pathname;
     try {
       if (path === "/api/tick" || path === "/tick") {
-        const d = await fetchTick();
+        const d = await fetchTick(u.searchParams.get("sym") || "XAUUSD");
         return json(d, d.ok ? 200 : 502);
       }
       if (path === "/api/klines" || path === "/klines") {
         const iv = u.searchParams.get("interval") || "15m";
         if (!ALLOWED[iv]) return json({ ok: false, err: ["bad interval"] }, 400);
-        const d = await fetchBars(iv);
+        const d = await fetchBars(iv, u.searchParams.get("sym") || "XAUUSD");
         return json(d, d.ok ? 200 : 502);
       }
       if (path === "/api/health" || path === "/health") {
@@ -80,10 +80,14 @@ export default {
         pack.days = pack.days || [];
         var hit = pack.days.find(function (x) { return x.day === day; });
         if (!hit) {
-          hit = { day: day || new Date().toISOString().slice(0, 10), text: "", photos: [], t: Date.now() };
+          hit = { day: day || new Date().toISOString().slice(0, 10), text: "", lines: [], photos: [], trades: [], t: Date.now() };
           pack.days.push(hit);
         }
-        if (line) hit.text = hit.text ? hit.text + "\n" + line : line;
+        hit.lines = hit.lines || [];
+        if (line) {
+          hit.lines.push({ t: Date.now(), text: line });
+          hit.text = hit.lines.map(function (l) { return l.text; }).join("\n");
+        }
         if (body.trade && (body.trade.side === "BUY" || body.trade.side === "SELL") && isFinite(Number(body.trade.entry))) {
           hit.trades = hit.trades || [];
           hit.trades.push({

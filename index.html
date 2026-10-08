@@ -153,7 +153,7 @@
     <div class="price-row">
       <div>
         <div class="px" id="px">—</div>
-        <div class="chg" id="chg">XAUUSD FX · Swissquote / MT5</div>
+        <div class="chg" id="chg">XAUUSD · Swissquote / MT5</div>
       </div>
     </div>
 
@@ -165,6 +165,11 @@
       <ul class="why" id="why"></ul>
     </div>
 
+    <div class="tools" id="symRow">
+      <button type="button" data-sym="XAUUSD" class="on">XAUUSD</button>
+      <button type="button" data-sym="BTCUSD">BTC/USD</button>
+      <button type="button" data-sym="USOIL">USOil</button>
+    </div>
     <div class="tools">
       <button type="button" data-tf="5m">5m</button>
       <button type="button" data-tf="15m" class="on">15m</button>
@@ -225,6 +230,8 @@
 <script>
 (function () {
   var tf = "15m";
+  var sym = "XAUUSD";
+  var SYM_LAB = { XAUUSD: "XAUUSD", BTCUSD: "BTC/USD", USOIL: "USOil" };
   var bars = [];
   var spot = null;
   var paxg = null;
@@ -784,7 +791,7 @@
     live.className = "live " + (ok ? "on" : err ? "bad" : "");
     $("liveTxt").textContent = refreshing
       ? "đang lấy tick…"
-      : (ok ? ("LIVE · " + tfLabel() + " · " + clock(fxAt)) : (err || "đang nối feed…"));
+      : (ok ? ("LIVE · " + (SYM_LAB[sym] || sym) + " · " + tfLabel() + " · " + clock(fxAt)) : (err || "đang nối feed…"));
     var px = fx != null ? fx : (paxg != null ? paxg : spot);
     if (px != null) {
       showPx(px);
@@ -800,7 +807,7 @@
   }
 
   async function fetchTick() {
-    var j = await getJson(apiBase() + "/api/tick");
+    var j = await getJson(apiBase() + "/api/tick?sym=" + encodeURIComponent(sym));
     if (j.fx && isFinite(j.fx.mid)) {
       fx = j.fx.mid;
       fxAt = Date.now();
@@ -817,7 +824,7 @@
     if (fx == null) throw new Error((j.err && j.err.join(" · ")) || "fx empty");
   }
   async function fetchBars() {
-    var j = await getJson(apiBase() + "/api/klines?interval=" + interval());
+    var j = await getJson(apiBase() + "/api/klines?interval=" + interval() + "&sym=" + encodeURIComponent(sym));
     if (!j || !j.bars || !j.bars.length) throw new Error("kline empty");
     bars = j.bars.map(function (k) {
       return { t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c };
@@ -865,6 +872,16 @@
     }
   }
 
+  document.querySelectorAll("[data-sym]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      sym = btn.getAttribute("data-sym");
+      document.querySelectorAll("[data-sym]").forEach(function (b) { b.classList.toggle("on", b === btn); });
+      bars = []; fx = null; paxg = null; spot = null; drawings = []; forecast = null;
+      viewRight = -1; visN = 80; yLo = null; yHi = null;
+      $("chg").textContent = (SYM_LAB[sym] || sym) + " · loading";
+      refreshNow();
+    });
+  });
   document.querySelectorAll("[data-tf]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       tf = btn.getAttribute("data-tf");
@@ -898,13 +915,21 @@
   function paintNotes() {
     var ul = $("noteList");
     var last = days.slice().reverse().slice(0, 14);
-    ul.innerHTML = last.map(function (n) {
-      var pics = (n.photos || []).length ? " · " + n.photos.length + " ảnh" : "";
-      var tr = (n.trades || []).map(function (t) {
-        return t.side + " " + t.entry + (t.tp != null ? " TP " + t.tp : "") + (t.sl != null ? " cut " + t.sl : "");
-      }).join("; ");
-      return "<li><b>" + esc(n.day) + "</b>" + pics + (tr ? " · " + esc(tr) : "") + " — " + esc((n.text || "").slice(0, 140)) + "</li>";
-    }).join("");
+    var rows = [];
+    last.forEach(function (n) {
+      var lines = (n.lines && n.lines.length) ? n.lines : (n.text ? n.text.split(/\n+/).map(function (t) { return { text: t }; }) : [{ text: "" }]);
+      var trades = n.trades || [];
+      lines.forEach(function (ln, i) {
+        var tr = trades[i] ? (trades[i].side + " " + trades[i].entry + (trades[i].tp != null ? " TP " + trades[i].tp : "") + (trades[i].sl != null ? " cut " + trades[i].sl : "")) : "";
+        rows.push("<li><b>" + esc(n.day) + "</b>" + (tr ? " · " + esc(tr) : "") + " — " + esc((ln.text || "").slice(0, 220)) + "</li>");
+      });
+      if (!lines.length && trades.length) {
+        trades.forEach(function (t) {
+          rows.push("<li><b>" + esc(n.day) + "</b> · " + esc(t.side + " " + t.entry) + "</li>");
+        });
+      }
+    });
+    ul.innerHTML = rows.slice(0, 24).join("");
     $("adviseOut").textContent = lastAdvise || "";
   }
   function paintThumbs() {
