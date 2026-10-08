@@ -95,6 +95,7 @@ export default {
           fx: body.fx,
           lastBar: body.lastBar,
           chartReads: body.chartReads,
+          marks: body.marks,
           notes: pack.days || []
         });
         const text = await askClaude(env.ANTHROPIC_API_KEY, snap, body.images);

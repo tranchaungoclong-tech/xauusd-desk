@@ -201,7 +201,7 @@
       <div class="thumbs" id="thumbs"></div>
       <div class="row">
         <button type="button" id="btnSubmit">Submit</button>
-        <button type="button" class="ghost" id="btnAdvise">Kẻ path</button>
+        <button type="button" class="ghost" id="btnAdvise">Tóm nét</button>
       </div>
       <div class="st" id="noteSt">Chọn ngày · ghi · thả ảnh · Submit. AI lưu nhật ký. Dùng local 4180 — GitHub.io chưa gắn kho.</div>
       <ul id="noteList"></ul>
@@ -979,13 +979,20 @@
   $("btnAdvise").addEventListener("click", function () {
     var btn = $("btnAdvise");
     btn.disabled = true;
-    $("noteSt").textContent = "Đang kẻ path…";
+    $("noteSt").textContent = "Đang tóm nét mày kẻ…";
     var last = bars.length ? bars[bars.length - 1] : null;
     postJson(apiBase() + "/api/advise", {
       tf: tf,
       fx: fx,
       lastBar: last ? { h: last.h, l: last.l, c: last.c } : null,
       chartReads: chartReads.map(function (c) { return c.name || c; }),
+      marks: drawings.filter(function (o) { return !o.auto; }).map(function (o) {
+        if (o.type === "hline") return { type: "hline", p: o.p };
+        if (o.type === "line") return { type: "line", p1: o.p1, p2: o.p2 };
+        if (o.type === "fib") return { type: "fib", hi: Math.max(o.p1, o.p2), lo: Math.min(o.p1, o.p2) };
+        if (o.type === "rect") return { type: "khung", p1: o.p1, p2: o.p2 };
+        return { type: o.type };
+      }),
       images: chartReads.slice(-4).map(function (c) {
         return { mime: c.mime || "image/png", data: c.dataUrl || "" };
       }).filter(function (im) { return im.data; })
@@ -993,9 +1000,10 @@
       if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "advise fail");
       lastAdvise = r.j.advise || "";
       if (r.j.days) days = r.j.days;
-      $("noteSt").textContent = "Path kẻ xong · không phải lệnh sàn";
+      $("noteSt").textContent = "Tóm nét của mày · không phải lệnh sàn";
       paintNotes();
-      stampForecast(r.j.path);
+      var path = r.j.path || {};
+      if ((!drawings.filter(function (o) { return !o.auto; }).length) && (path.path || path.hlines)) stampForecast(path);
     }).catch(function (e) {
       $("noteSt").textContent = String(e.message || e);
     }).then(function () { btn.disabled = false; });

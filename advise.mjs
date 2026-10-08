@@ -21,19 +21,20 @@ export function snapshotFrom(body) {
     fx: fx,
     lastBar: last,
     notes: lastN,
-    chartReads: Array.isArray(body && body.chartReads) ? body.chartReads.slice(-12) : []
+    chartReads: Array.isArray(body && body.chartReads) ? body.chartReads.slice(-12) : [],
+    marks: Array.isArray(body && body.marks) ? body.marks.slice(0, 40) : []
   };
 }
 
 export function systemPrompt() {
   return [
-    "You are a gold-desk path coach for XAUUSD, not a broker and not an RSI bot.",
-    "Use only price structure: swing high / swing low, equal highs, trend line, Fibonacci 0.382 / 0.5 / 0.618.",
-    "Do not mention EMA, RSI, ATR, MACD, or stochastic.",
+    "You summarize the user's own chart marks on XAUUSD. You are not a broker.",
+    "Input marks are HIS lines: HLine = level, Line = trend, Fib = his swing.",
+    "Do not invent new RSI/EMA/ATR. Do not contradict a level he already drew unless the live price has already broken it.",
     "Reply with JSON only, no markdown. Shape:",
-    '{"bias":"up|down|range","path":[{"p":number,"label":"string"}],"hlines":[number],"fib":{"hi":number,"lo":number}|null,"note":"vietnamese 4-6 lines"}',
-    "path is 3–6 future price points in time order (next reaction → later). hlines are key highs/lows to draw.",
-    "Never invent a live order. If swings are missing, bias=range and path stays near last price."
+    '{"bias":"up|down|range","path":[],"hlines":[],"fib":null,"note":"vietnamese 4-8 lines"}',
+    "path and hlines stay EMPTY unless he drew nothing — then you may propose. Prefer note-only summary of HIS marks.",
+    "Never invent a live order."
   ].join(" ");
 }
 
@@ -47,10 +48,16 @@ export function userPrompt(snap) {
   const reads = snap.chartReads.length
     ? snap.chartReads.join("\n")
     : "(no chart-photo reads yet)";
+  const marks = (snap.marks || []).length
+    ? snap.marks.map(function (m, i) { return (i + 1) + ". " + JSON.stringify(m); }).join("\n")
+    : "(he has not drawn Line / HLine / Fib on the desk)";
   return [
     "Khung: " + snap.tf,
     "FX mid: " + (snap.fx == null ? "—" : snap.fx),
     last,
+    "",
+    "HIS chart marks (source of truth):",
+    marks,
     "",
     "Reads from cao thủ chart photos:",
     reads,
@@ -58,7 +65,7 @@ export function userPrompt(snap) {
     "Daily notes (oldest → newest):",
     notes,
     "",
-    "Forecast the next price path. JSON only."
+    "Summarize HIS marks. JSON only. Leave path/hlines empty if he already drew."
   ].join("\n");
 }
 

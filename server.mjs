@@ -138,6 +138,7 @@ const server = http.createServer(function (req, res) {
         fx: body.fx,
         lastBar: body.lastBar,
         chartReads: body.chartReads,
+        marks: body.marks,
         notes: publicDays(pack)
       });
       askClaude(process.env.ANTHROPIC_API_KEY, snap, body.images).then(function (text) {
