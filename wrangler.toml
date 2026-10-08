@@ -6,3 +6,6 @@ workers_dev = true
 [[kv_namespaces]]
 binding = "NOTES"
 id = "72a7787247124e249c1dc81b564503a8"
+
+[ai]
+binding = "AI"

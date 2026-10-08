@@ -121,6 +121,10 @@
       background: var(--gold); color: #1a1404; border: 0; border-radius: 999px;
       padding: 8px 14px; font: 700 13px inherit; cursor: pointer;
     }
+    #chatLog { max-height: 280px; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    #chatLog p { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+    #chatLog .me { background: #10261c; }
+    #chatLog .ai { background: #182030; }
     .coach .row button.ghost, .coach label.ghost {
       background: var(--card); color: var(--ink); border: 1px solid var(--line);
     }
@@ -211,6 +215,18 @@
     <label class="pinchbar">2 ngón · kéo để phóng / thu
       <input id="pinchRange" type="range" min="12" max="400" value="80" />
     </label>
+
+    <div class="coach" id="chatBox">
+      <h3>NÓI VỚI ẢNH</h3>
+      <div class="reply" id="chatLog"></div>
+      <textarea id="chatIn" maxlength="1500" placeholder="Gửi ảnh line của cao thủ, rồi hỏi. Ví dụ: vùng nào, hướng nào."></textarea>
+      <div class="row">
+        <button type="button" id="btnChat">Gửi</button>
+        <label class="ghost">Ảnh<input type="file" accept="image/*" id="chatFile" hidden /></label>
+        <span class="st" id="chatPic"></span>
+      </div>
+      <div class="st" id="chatSt">Free trên Cloudflare. Không phải lệnh sàn. Ảnh không lưu.</div>
+    </div>
 
     <div class="coach" id="diaryBox">
       <h3>NHẬT KÝ</h3>
@@ -1058,6 +1074,58 @@
       paintNotes();
     }).catch(function (e) {
       $("noteSt").textContent = String(e.message || e) + " · dùng http://127.0.0.1:4180/";
+    }).then(function () { btn.disabled = false; });
+  });
+  var chatHist = [];
+  var chatImg = "";
+  function addChat(who, text) {
+    var p = document.createElement("p");
+    p.className = who;
+    p.textContent = text;
+    var log = $("chatLog");
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+  $("chatFile").addEventListener("change", function (ev) {
+    var f = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var s = Math.min(1, 900 / Math.max(img.width, img.height));
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.width * s));
+        c.height = Math.max(1, Math.round(img.height * s));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        chatImg = c.toDataURL("image/jpeg", 0.7);
+        $("chatPic").textContent = "đã chọn ảnh";
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  });
+  $("btnChat").addEventListener("click", function () {
+    var btn = $("btnChat");
+    var say = $("chatIn").value.trim();
+    if (!say && !chatImg) { $("chatSt").textContent = "Gõ câu hoặc chọn ảnh."; return; }
+    addChat("me", say || "(ảnh)");
+    var sentImg = chatImg;
+    chatImg = "";
+    $("chatPic").textContent = "";
+    $("chatIn").value = "";
+    btn.disabled = true;
+    $("chatSt").textContent = "Đang đọc…";
+    postJson(apiBase() + "/api/chat", { text: say, image: sentImg, history: chatHist }).then(function (r) {
+      if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "lỗi");
+      chatHist.push({ role: "user", content: say || "(ảnh chart)" });
+      chatHist.push({ role: "assistant", content: r.j.reply });
+      if (chatHist.length > 8) chatHist = chatHist.slice(-8);
+      addChat("ai", r.j.reply);
+      $("chatSt").textContent = "Free trên Cloudflare. Không phải lệnh sàn. Ảnh không lưu.";
+    }).catch(function (e) {
+      $("chatSt").textContent = String(e.message || e);
     }).then(function () { btn.disabled = false; });
   });
   $("btnAdvise").addEventListener("click", function () {
