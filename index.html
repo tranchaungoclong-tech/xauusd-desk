@@ -545,8 +545,11 @@
     lastCall = d;
     var w = cv.clientWidth || 1100;
     var h = cv.clientHeight || 420;
-    if (cv.width !== w) cv.width = w;
-    if (cv.height !== h) cv.height = h;
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    var bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#141a22";
     ctx.fillRect(0, 0, w, h);
@@ -613,6 +616,7 @@
       if (x < left - 8 || x > w - right + 8) return;
       var up = b.c >= b.o;
       ctx.strokeStyle = up ? "#3dd68c" : "#f36565";
+      ctx.lineWidth = Math.max(1.25, 1.6 / dpr);
       ctx.beginPath();
       ctx.moveTo(x, Y(b.h)); ctx.lineTo(x, Y(b.l)); ctx.stroke();
       var y1 = Y(Math.max(b.o, b.c)), y2 = Y(Math.min(b.o, b.c));
