@@ -74,7 +74,8 @@ export default {
         const body = await readBody(req);
         const day = String(body.day || "").slice(0, 10);
         const line = clampNote(body.text || body.note);
-        if (!line && !(body.photos && body.photos.length)) return json({ ok: false, err: ["empty diary"] }, 400);
+        var hasTrade = body.trade && (body.trade.side === "BUY" || body.trade.side === "SELL") && isFinite(Number(body.trade.entry));
+        if (!line && !(body.photos && body.photos.length) && !hasTrade) return json({ ok: false, err: ["empty diary"] }, 400);
         const pack = await getPack(env);
         pack.days = pack.days || [];
         var hit = pack.days.find(function (x) { return x.day === day; });
@@ -83,6 +84,16 @@ export default {
           pack.days.push(hit);
         }
         if (line) hit.text = hit.text ? hit.text + "\n" + line : line;
+        if (body.trade && (body.trade.side === "BUY" || body.trade.side === "SELL") && isFinite(Number(body.trade.entry))) {
+          hit.trades = hit.trades || [];
+          hit.trades.push({
+            side: body.trade.side,
+            entry: Number(body.trade.entry),
+            tp: isFinite(Number(body.trade.tp)) ? Number(body.trade.tp) : null,
+            sl: isFinite(Number(body.trade.sl)) ? Number(body.trade.sl) : null,
+            t: Date.now()
+          });
+        }
         hit.t = Date.now();
         const next = await putPack(env, pack);
         return json({ ok: true, days: next.days || [], lastAdvise: next.lastAdvise, at: next.at });

@@ -12,7 +12,13 @@ export function snapshotFrom(body) {
   const notes = Array.isArray(body && body.notes) ? body.notes : [];
   const lastN = notes.slice(-MAX_NOTES).map(function (n) {
     if (typeof n === "string") return clampNote(n);
-    if (n && n.day) return n.day + " · " + clampNote(n.text);
+    if (n && n.day) {
+      var line = n.day + " · " + clampNote(n.text);
+      (n.trades || []).forEach(function (tr) {
+        line += " | " + tr.side + " in " + tr.entry + (tr.tp != null ? " TP " + tr.tp : "") + (tr.sl != null ? " cut " + tr.sl : "");
+      });
+      return line;
+    }
     return clampNote(n && n.text);
   }).filter(Boolean);
   const last = body && body.lastBar ? body.lastBar : null;
@@ -28,8 +34,9 @@ export function snapshotFrom(body) {
 
 export function systemPrompt() {
   return [
-    "You summarize the user's own chart marks on XAUUSD. You are not a broker.",
+    "You summarize the user's own chart marks and HIS trade book on XAUUSD. You are not a broker.",
     "Input marks are HIS lines: HLine = level, Line = trend, Fib = his swing.",
+    "Trade book lines are HIS: side, entry, TP, cut. Remember that style when advising: typical TP/cut distance, BUY vs SELL bias.",
     "Do not invent new RSI/EMA/ATR. Do not contradict a level he already drew unless the live price has already broken it.",
     "Reply with JSON only, no markdown. Shape:",
     '{"bias":"up|down|range","path":[],"hlines":[],"fib":null,"note":"vietnamese 4-8 lines"}',

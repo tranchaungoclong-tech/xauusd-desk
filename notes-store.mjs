@@ -83,7 +83,8 @@ export function upsertDay(body) {
   var day = dayKey(body.day);
   var text = clampNote(body.text || body.note);
   var photosIn = Array.isArray(body.photos) ? body.photos.slice(0, MAX_PHOTOS) : [];
-  if (!text && !photosIn.length) throw new Error("empty diary");
+  var hasTrade = body.trade && (body.trade.side === "BUY" || body.trade.side === "SELL") && isFinite(Number(body.trade.entry));
+  if (!text && !photosIn.length && !hasTrade) throw new Error("empty diary");
   var pack = readPack();
   var saved = [];
   photosIn.forEach(function (p, i) {
@@ -97,6 +98,17 @@ export function upsertDay(body) {
   }
   if (text) hit.text = hit.text ? hit.text + "\n" + text : text;
   hit.photos = (hit.photos || []).concat(saved).slice(-MAX_PHOTOS);
+  var trade = body.trade;
+  if (trade && (trade.side === "BUY" || trade.side === "SELL") && isFinite(Number(trade.entry))) {
+    hit.trades = hit.trades || [];
+    hit.trades.push({
+      side: trade.side,
+      entry: Number(trade.entry),
+      tp: isFinite(Number(trade.tp)) ? Number(trade.tp) : null,
+      sl: isFinite(Number(trade.sl)) ? Number(trade.sl) : null,
+      t: Date.now()
+    });
+  }
   hit.t = Date.now();
   pack.days.sort(function (a, b) { return String(a.day).localeCompare(String(b.day)); });
   pack.at = Date.now();
@@ -105,7 +117,7 @@ export function upsertDay(body) {
 
 export function publicDays(pack) {
   return (pack.days || []).map(function (d) {
-    return { day: d.day, text: d.text, photos: d.photos || [], t: d.t || 0 };
+    return { day: d.day, text: d.text, photos: d.photos || [], trades: d.trades || [], t: d.t || 0 };
   });
 }
 
