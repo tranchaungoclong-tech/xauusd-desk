@@ -110,10 +110,25 @@
       background: var(--gold); color: #1a1404; border: 0; border-radius: 999px;
       padding: 8px 14px; font: 700 13px inherit; cursor: pointer;
     }
-    .coach .row button.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+    .coach .row button.ghost, .coach label.ghost {
+      background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    }
     .coach .row button:disabled { opacity: .55; cursor: wait; }
     .coach .st { font-size: 11px; color: var(--mute); margin-top: 8px; }
     .coach ul { margin: 8px 0 0 18px; font-size: 13px; line-height: 1.45; color: #d5dbe6; }
+    .coach .dates { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .coach .dates label { flex: 1; min-width: 90px; font-size: 11px; color: var(--mute); }
+    .coach .dates input {
+      width: 100%; margin-top: 4px; background: #0c1016; color: var(--ink);
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px inherit;
+    }
+    .dropzone {
+      margin-top: 8px; border: 1px dashed var(--line); border-radius: 10px; padding: 16px 12px;
+      text-align: center; color: var(--mute); font-size: 13px; cursor: pointer;
+    }
+    .dropzone.over { border-color: var(--gold); color: var(--gold); }
+    .thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .thumbs img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
     .coach .reply {
       margin-top: 10px; white-space: pre-wrap; font-size: 14px; line-height: 1.5;
       color: #d5dbe6; background: rgba(0,0,0,.22); border-radius: 10px; padding: 10px 12px;
@@ -176,15 +191,19 @@
       <canvas id="chart" width="1100" height="420"></canvas>
     </div>
 
-    <div class="coach">
-      <h3>NOTES · ADVISE</h3>
-      <textarea id="noteIn" maxlength="800" placeholder="Ghi nhận định / lỗi / setup hôm nay. Lưu vào pipe. Advise đọc notes + rule call."></textarea>
-      <div class="row">
-        <button type="button" id="btnSaveNote">Lưu note</button>
-        <button type="button" class="ghost" id="btnAdvise">Kẻ path</button>
-        <label class="ghost" id="btnChartPhoto" style="display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;border:1px solid var(--line);cursor:pointer;font:700 13px inherit;">Drop chart ảnh<input type="file" accept="image/*" multiple hidden id="chartFiles" /></label>
+    <div class="coach" id="diaryBox">
+      <h3>NHẬT KÝ</h3>
+      <div class="dates">
+        <label>Ngày<input id="noteDay" type="date" /></label>
       </div>
-      <div class="st" id="noteSt">Note + ảnh cao thủ → kẻ line / Fib. Không RSI. Không phải lệnh sàn.</div>
+      <textarea id="noteIn" maxlength="2000" placeholder="Nhận định ngày này. Thả ảnh chart vào ô dưới."></textarea>
+      <div class="dropzone" id="dropZone">Thả ảnh chart vào đây · hoặc bấm để chọn<input type="file" accept="image/*" multiple hidden id="chartFiles" /></div>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="row">
+        <button type="button" id="btnSubmit">Submit</button>
+        <button type="button" class="ghost" id="btnAdvise">Kẻ path</button>
+      </div>
+      <div class="st" id="noteSt">Chọn ngày · ghi · thả ảnh · Submit. AI lưu nhật ký. Dùng local 4180 — GitHub.io chưa gắn kho.</div>
       <ul id="noteList"></ul>
       <div class="reply" id="adviseOut"></div>
     </div>
@@ -845,26 +864,46 @@
   });
   $("btnRefresh").addEventListener("click", refreshNow);
 
-  var notes = [];
+  var days = [];
   var lastAdvise = "";
+  var pendingPhotos = [];
+  function todayISO() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1);
+    var dd = String(d.getDate());
+    if (m.length < 2) m = "0" + m;
+    if (dd.length < 2) dd = "0" + dd;
+    return d.getFullYear() + "-" + m + "-" + dd;
+  }
+  $("noteDay").value = todayISO();
+  function esc(s) {
+    return String(s || "").replace(/[<>&]/g, function (c) {
+      return c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;";
+    });
+  }
   function paintNotes() {
     var ul = $("noteList");
-    var last = notes.slice(-12).reverse();
+    var last = days.slice().reverse().slice(0, 14);
     ul.innerHTML = last.map(function (n) {
-      var when = n.t ? clock(n.t) : "";
-      return "<li>" + (when ? when + " · " : "") + String(n.text || "").replace(/[<>&]/g, function (c) {
-        return c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;";
-      }) + "</li>";
+      var pics = (n.photos || []).length ? " · " + n.photos.length + " ảnh" : "";
+      return "<li><b>" + esc(n.day) + "</b>" + pics + " — " + esc((n.text || "").slice(0, 180)) + "</li>";
     }).join("");
     $("adviseOut").textContent = lastAdvise || "";
+  }
+  function paintThumbs() {
+    $("thumbs").innerHTML = pendingPhotos.map(function (p) {
+      return "<img src=\"" + p.dataUrl + "\" alt=\"\" />";
+    }).join("");
   }
   function loadNotes() {
     getJson(apiBase() + "/api/notes").then(function (j) {
       if (!j || !j.ok) return;
-      notes = j.notes || [];
+      days = j.days || [];
       lastAdvise = j.lastAdvise || "";
       paintNotes();
-    }).catch(function () {});
+    }).catch(function () {
+      $("noteSt").textContent = "Mở http://127.0.0.1:4180/ để lưu nhật ký. GitHub.io chưa gắn kho.";
+    });
   }
   function postJson(url, body) {
     return fetch(url, {
@@ -873,20 +912,68 @@
       body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { okHttp: r.ok, j: j }; }); });
   }
-  $("btnSaveNote").addEventListener("click", function () {
+  function addFiles(files) {
+    var list = Array.prototype.slice.call(files || []).filter(function (f) {
+      return String(f.type || "").indexOf("image") === 0;
+    }).slice(0, 6);
+    if (!list.length) return;
+    Promise.all(list.map(function (f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve({ name: f.name, dataUrl: r.result }); };
+        r.onerror = reject;
+        r.readAsDataURL(f);
+      });
+    })).then(function (shots) {
+      shots.forEach(function (s) {
+        var mime = "image/png";
+        var m = String(s.dataUrl || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);/);
+        if (m) mime = m[1];
+        pendingPhotos.push({ name: s.name, mime: mime, dataUrl: s.dataUrl });
+        chartReads.push({ name: s.name, mime: mime, dataUrl: s.dataUrl });
+      });
+      pendingPhotos = pendingPhotos.slice(-6);
+      paintThumbs();
+      $("noteSt").textContent = pendingPhotos.length + " ảnh chờ Submit.";
+    });
+  }
+  var dropEl = $("dropZone");
+  dropEl.addEventListener("click", function () { $("chartFiles").click(); });
+  ["dragenter", "dragover"].forEach(function (n) {
+    dropEl.addEventListener(n, function (e) { e.preventDefault(); dropEl.classList.add("over"); });
+  });
+  dropEl.addEventListener("dragleave", function () { dropEl.classList.remove("over"); });
+  dropEl.addEventListener("drop", function (e) {
+    e.preventDefault();
+    dropEl.classList.remove("over");
+    addFiles(e.dataTransfer && e.dataTransfer.files);
+  });
+  $("chartFiles").addEventListener("change", function (ev) {
+    addFiles(ev.target.files);
+    ev.target.value = "";
+  });
+  $("btnSubmit").addEventListener("click", function () {
     var text = ($("noteIn").value || "").trim();
-    if (!text) { $("noteSt").textContent = "Gõ note trước."; return; }
-    var btn = $("btnSaveNote");
+    var day = $("noteDay").value || todayISO();
+    if (!text && !pendingPhotos.length) { $("noteSt").textContent = "Ghi chữ hoặc thả ảnh."; return; }
+    var btn = $("btnSubmit");
     btn.disabled = true;
-    postJson(apiBase() + "/api/notes", { text: text }).then(function (r) {
-      if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "save fail");
-      notes = r.j.notes || [];
+    $("noteSt").textContent = "Đang lưu nhật ký…";
+    postJson(apiBase() + "/api/notes", {
+      day: day,
+      text: text,
+      photos: pendingPhotos.map(function (p) { return p.dataUrl; })
+    }).then(function (r) {
+      if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "not found");
+      days = r.j.days || [];
       lastAdvise = r.j.lastAdvise || lastAdvise;
       $("noteIn").value = "";
-      $("noteSt").textContent = "Đã lưu · " + notes.length + " notes";
+      pendingPhotos = [];
+      paintThumbs();
+      $("noteSt").textContent = "Đã lưu nhật ký " + day;
       paintNotes();
     }).catch(function (e) {
-      $("noteSt").textContent = String(e.message || e);
+      $("noteSt").textContent = String(e.message || e) + " · dùng http://127.0.0.1:4180/";
     }).then(function () { btn.disabled = false; });
   });
   $("btnAdvise").addEventListener("click", function () {
@@ -905,35 +992,13 @@
     }).then(function (r) {
       if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "advise fail");
       lastAdvise = r.j.advise || "";
-      if (r.j.notes) notes = r.j.notes;
+      if (r.j.days) days = r.j.days;
       $("noteSt").textContent = "Path kẻ xong · không phải lệnh sàn";
       paintNotes();
       stampForecast(r.j.path);
     }).catch(function (e) {
       $("noteSt").textContent = String(e.message || e);
     }).then(function () { btn.disabled = false; });
-  });
-  $("chartFiles").addEventListener("change", function (ev) {
-    var files = Array.prototype.slice.call(ev.target.files || []);
-    ev.target.value = "";
-    if (!files.length) return;
-    $("noteSt").textContent = "Đọc " + files.length + " ảnh…";
-    Promise.all(files.map(function (f) {
-      return new Promise(function (resolve, reject) {
-        var r = new FileReader();
-        r.onload = function () { resolve({ name: f.name, dataUrl: r.result }); };
-        r.onerror = reject;
-        r.readAsDataURL(f);
-      });
-    })).then(function (shots) {
-      shots.forEach(function (s) {
-        var mime = "image/png";
-        var m = String(s.dataUrl || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);/);
-        if (m) mime = m[1];
-        chartReads.push({ name: s.name || "chart", mime: mime, dataUrl: s.dataUrl });
-      });
-      $("noteSt").textContent = chartReads.length + " ảnh chart trong feed. Bấm Kẻ path.";
-    }).catch(function () { $("noteSt").textContent = "Đọc ảnh fail"; });
   });
   $("btnClearDraw").addEventListener("click", function () {
     drawings = []; draft = null; sel = -1; forecast = null; render();

@@ -12,6 +12,7 @@ export function snapshotFrom(body) {
   const notes = Array.isArray(body && body.notes) ? body.notes : [];
   const lastN = notes.slice(-MAX_NOTES).map(function (n) {
     if (typeof n === "string") return clampNote(n);
+    if (n && n.day) return n.day + " · " + clampNote(n.text);
     return clampNote(n && n.text);
   }).filter(Boolean);
   const last = body && body.lastBar ? body.lastBar : null;

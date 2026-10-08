@@ -8,7 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchTick, fetchBars, ALLOWED, jsonHeaders } from "./feed.mjs";
-import { readPack, addNote, writePack } from "./notes-store.mjs";
+import { readPack, upsertDay, writePack, publicDays, PHOTO_DIR } from "./notes-store.mjs";
 import { snapshotFrom, askClaude, parsePath } from "./advise.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -103,16 +103,27 @@ const server = http.createServer(function (req, res) {
     });
     return;
   }
+  if (u.pathname.indexOf("/api/photo/") === 0 && req.method === "GET") {
+    const name = path.basename(u.pathname.slice("/api/photo/".length));
+    const abs = path.join(PHOTO_DIR, name);
+    fs.readFile(abs, function (err, buf) {
+      if (err) { res.writeHead(404); res.end("not found"); return; }
+      const type = name.slice(-3) === "png" ? "image/png" : "image/jpeg";
+      res.writeHead(200, { "content-type": type, "cache-control": "public, max-age=86400" });
+      res.end(buf);
+    });
+    return;
+  }
   if (u.pathname === "/api/notes" && req.method === "GET") {
     const pack = readPack();
-    jsonRes(res, 200, { ok: true, notes: pack.notes, lastAdvise: pack.lastAdvise, at: pack.at });
+    jsonRes(res, 200, { ok: true, days: publicDays(pack), lastAdvise: pack.lastAdvise, at: pack.at });
     return;
   }
   if (u.pathname === "/api/notes" && req.method === "POST") {
     readJson(function (body) {
       try {
-        const pack = addNote(body.text || body.note);
-        jsonRes(res, 200, { ok: true, notes: pack.notes, lastAdvise: pack.lastAdvise, at: pack.at });
+        const pack = upsertDay(body);
+        jsonRes(res, 200, { ok: true, days: publicDays(pack), lastAdvise: pack.lastAdvise, at: pack.at });
       } catch (e) {
         jsonRes(res, 400, { ok: false, err: [String(e.message || e)] });
       }
@@ -127,7 +138,7 @@ const server = http.createServer(function (req, res) {
         fx: body.fx,
         lastBar: body.lastBar,
         chartReads: body.chartReads,
-        notes: pack.notes
+        notes: publicDays(pack)
       });
       askClaude(process.env.ANTHROPIC_API_KEY, snap, body.images).then(function (text) {
         const pathDraw = parsePath(text);

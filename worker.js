@@ -20,20 +20,19 @@ async function readBody(req) {
 }
 
 async function getPack(env) {
-  if (!env.NOTES) return { notes: [], lastAdvise: "", at: 0 };
+  if (!env.NOTES) return { days: [], lastAdvise: "", at: 0 };
   const raw = await env.NOTES.get(KEY, "json");
-  if (!raw || !Array.isArray(raw.notes)) return { notes: [], lastAdvise: "", at: 0 };
-  return {
-    notes: raw.notes.slice(-MAX_NOTES),
-    lastAdvise: String(raw.lastAdvise || ""),
-    at: Number(raw.at) || 0
-  };
+  if (!raw) return { days: [], lastAdvise: "", at: 0 };
+  if (Array.isArray(raw.days)) {
+    return { days: raw.days.slice(-MAX_NOTES), lastAdvise: String(raw.lastAdvise || ""), at: Number(raw.at) || 0 };
+  }
+  return { days: [], lastAdvise: String(raw.lastAdvise || ""), at: Number(raw.at) || 0 };
 }
 
 async function putPack(env, pack) {
   if (!env.NOTES) throw new Error("NOTES KV not bound");
   const next = {
-    notes: (pack.notes || []).slice(-MAX_NOTES),
+    days: (pack.days || []).slice(-MAX_NOTES),
     lastAdvise: String(pack.lastAdvise || "").slice(0, 4000),
     at: Date.now()
   };
@@ -69,16 +68,24 @@ export default {
       }
       if (path === "/api/notes" && req.method === "GET") {
         const pack = await getPack(env);
-        return json({ ok: true, notes: pack.notes, lastAdvise: pack.lastAdvise, at: pack.at });
+        return json({ ok: true, days: pack.days || [], lastAdvise: pack.lastAdvise, at: pack.at });
       }
       if (path === "/api/notes" && req.method === "POST") {
         const body = await readBody(req);
+        const day = String(body.day || "").slice(0, 10);
         const line = clampNote(body.text || body.note);
-        if (!line) return json({ ok: false, err: ["empty note"] }, 400);
+        if (!line && !(body.photos && body.photos.length)) return json({ ok: false, err: ["empty diary"] }, 400);
         const pack = await getPack(env);
-        pack.notes.push({ t: Date.now(), text: line });
+        pack.days = pack.days || [];
+        var hit = pack.days.find(function (x) { return x.day === day; });
+        if (!hit) {
+          hit = { day: day || new Date().toISOString().slice(0, 10), text: "", photos: [], t: Date.now() };
+          pack.days.push(hit);
+        }
+        if (line) hit.text = hit.text ? hit.text + "\n" + line : line;
+        hit.t = Date.now();
         const next = await putPack(env, pack);
-        return json({ ok: true, notes: next.notes, lastAdvise: next.lastAdvise, at: next.at });
+        return json({ ok: true, days: next.days || [], lastAdvise: next.lastAdvise, at: next.at });
       }
       if (path === "/api/advise" && req.method === "POST") {
         const body = await readBody(req);
@@ -88,7 +95,7 @@ export default {
           fx: body.fx,
           lastBar: body.lastBar,
           chartReads: body.chartReads,
-          notes: pack.notes
+          notes: pack.days || []
         });
         const text = await askClaude(env.ANTHROPIC_API_KEY, snap, body.images);
         const pathDraw = parsePath(text);
