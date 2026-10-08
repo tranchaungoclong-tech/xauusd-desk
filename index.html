@@ -1255,8 +1255,10 @@
     drawings.push({ type: "hline", p: tp, auto: true });
     drawings.push({ type: "hline", p: entry + sl, auto: true });
     drawings.push({ type: "rect", t1: tA, p1: entry + sl, t2: tB, p2: tp, auto: true });
-    lastAdvise = "Ví dụ 1 lệnh — SELL " + entry + " · cắt " + (entry + sl) + " · TP " + tp + "\nKhông phải lệnh sàn. BUY 4250 không vẽ trừ khi giá ổn định trên đó.";
-    $("noteSt").textContent = "1 lệnh SELL · không phải lệnh sàn";
+    lastAdvise = (sell.why || ("SELL " + entry + " vì plan tuần: down dưới 4250, test lại cự kháng.")) +
+      "\n\nVí dụ: SELL " + entry + " · cắt " + (entry + sl) + " · TP " + tp +
+      "\nKhông phải lệnh sàn. BUY 4250 không vẽ trừ khi giá ổn định trên đó.";
+    $("noteSt").textContent = "1 lệnh SELL + lý do · không phải lệnh sàn";
     paintNotes();
     render();
   }

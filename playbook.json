@@ -6,7 +6,12 @@
   "xauusd": {
     "bias": "down while under 4250",
     "reject": 4230,
-    "sell": { "entry": 4200, "tp": [4123, 4000], "sl": 15 },
+    "sell": {
+      "entry": 4200,
+      "tp": [4123, 4000],
+      "sl": 15,
+      "why": "Không phải giá hiện tại. Plan tuần 8 Oct: down khi dưới 4250; 4230 đã reject. Canh SELL khi giá test lại 4200 (cự kháng cũ). TP1 4123 = đáy gần. Cắt 10–15. TP2 4000 chỉ khi gồng được."
+    },
     "buy": { "confirm": 4250, "tp": 4400, "sl": 15 },
     "style": "M30/H1 trend line. Sell pullback to prior resistance. Cut 10–15. Trail if it runs (gồng lời) — TP2 4000 is the stretch."
   },
