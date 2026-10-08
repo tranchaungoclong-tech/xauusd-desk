@@ -1,0 +1,19 @@
+{
+  "id": "cao-thu-gold-usoil-2026-10-08",
+  "saved": "2026-10-08",
+  "source": "nhật ký pipe + chart photo (trend line, not RSI)",
+  "not_a_broker": true,
+  "xauusd": {
+    "bias": "down while under 4250",
+    "reject": 4230,
+    "sell": { "entry": 4200, "tp": [4123, 4000], "sl": 15 },
+    "buy": { "confirm": 4250, "tp": 4400, "sl": 15 },
+    "style": "M30/H1 trend line. Sell pullback to prior resistance. Cut 10–15. Trail if it runs (gồng lời) — TP2 4000 is the stretch."
+  },
+  "usoil": {
+    "bias": "buy dips while H4 holds 87–88",
+    "support": [87, 88],
+    "resist": 102,
+    "style": "Buy the hold on 87–88. Not a copy of the gold screenshot."
+  }
+}

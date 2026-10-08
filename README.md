@@ -12,13 +12,15 @@ Open http://127.0.0.1:4180/
 
 Tick = Swissquote XAU/USD mid (fallback MT5). Live candles = XAUUSD MT5. History = COMEX GC=F: 1D/1W from 2020; 1h/4h ~2 years; 5m/15m ~1 month.
 
-## Notes + Advise
+## Nhật ký + Tóm nét
 
-Type a daily note on the page → **Lưu note**. **Advise** sends notes + the current EMA/RSI/ATR call to Claude. Not a broker.
+Pick a day, write, drop chart photos, fill BUY/SELL · entry · TP · cut, **Submit**. Diary lives on the FX pipe KV — **not in git**. Photos on github.io currently do not persist (KV size); text + trades do.
 
-Local: notes file `private/notes.json` (gitignored). Needs `ANTHROPIC_API_KEY` in the shell for Advise.
+**Tóm nét** summarizes HIS Line/HLine/Fib + the trade book. No RSI.
 
-Live Worker: bind KV `NOTES`, then `npx wrangler secret put ANTHROPIC_API_KEY --config wrangler.toml`. Pages cannot hold the key.
+**Ví dụ vào lệnh** loads `playbook.json` (in git) and draws levels. 8 Oct lock: XAU sell 4200 TP 4123/4000 cut 10–15 while under 4250; buy only if stable above 4250 TP 4400. USOil buy 87–88 / resist 102. Not a copy of the cao thủ screenshot. Not a broker.
+
+Local: `private/notes.json` (gitignored). Live Worker has KV `NOTES` + `ANTHROPIC_API_KEY` secret.
 
 ## Live
 

@@ -221,6 +221,7 @@
       <div class="row">
         <button type="button" id="btnSubmit">Submit</button>
         <button type="button" class="ghost" id="btnAdvise">Tóm nét</button>
+        <button type="button" class="ghost" id="btnPlay">Ví dụ vào lệnh</button>
       </div>
       <div class="st" id="noteSt">Ngày · chữ · ảnh · lệnh (vào / TP / cắt). Submit lưu. Tóm nét đọc sổ lệnh. Dùng 4180.</div>
       <ul id="noteList"></ul>
@@ -1232,6 +1233,42 @@
       if (sel >= 0) dropSel();
       else { drawings.pop(); render(); }
     }
+  });
+
+  function applyPlaybook(book) {
+    if (!book || !bars.length) return;
+    var x = book.xauusd || {};
+    var t0 = bars[Math.max(0, bars.length - 40)].t;
+    var t1 = bars[bars.length - 1].t;
+    var t2 = t1 + 18 * barMs();
+    drawings = drawings.filter(function (o) { return !o.auto; });
+    function h(p) { drawings.push({ type: "hline", p: p, auto: true }); }
+    if (x.reject) h(x.reject);
+    if (x.sell && x.sell.entry) h(x.sell.entry);
+    if (x.sell && x.sell.tp) x.sell.tp.forEach(h);
+    if (x.buy && x.buy.confirm) h(x.buy.confirm);
+    if (x.buy && x.buy.tp) h(x.buy.tp);
+    if (x.sell && x.sell.entry && x.sell.tp && x.sell.tp[0]) {
+      drawings.push({ type: "line", t1: t0, p1: x.reject || x.sell.entry, t2: t2, p2: x.sell.tp[0], auto: true });
+    }
+    var bits = [];
+    if (x.bias) bits.push("XAU " + x.bias);
+    if (x.sell) bits.push("Canh SELL " + x.sell.entry + " TP " + (x.sell.tp || []).join("/") + " cut ~" + (x.sell.sl || 15));
+    if (x.buy) bits.push("BUY chỉ khi ổn định trên " + x.buy.confirm + " TP " + x.buy.tp);
+    if (book.usoil) bits.push("USOil buy dips " + (book.usoil.support || []).join("-") + " / resist " + book.usoil.resist);
+    bits.push("Ví dụ từ playbook GitHub — không copy chart cao thủ. Không phải lệnh sàn.");
+    lastAdvise = bits.join("\n");
+    $("noteSt").textContent = "Ví dụ vào lệnh từ playbook · không phải lệnh sàn";
+    paintNotes();
+    render();
+  }
+  $("btnPlay").addEventListener("click", function () {
+    fetch("playbook.json", { cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("playbook missing");
+      return r.json();
+    }).then(applyPlaybook).catch(function (e) {
+      $("noteSt").textContent = String(e.message || e);
+    });
   });
 
   refreshNow();
