@@ -181,9 +181,10 @@
       <textarea id="noteIn" maxlength="800" placeholder="Ghi nhận định / lỗi / setup hôm nay. Lưu vào pipe. Advise đọc notes + rule call."></textarea>
       <div class="row">
         <button type="button" id="btnSaveNote">Lưu note</button>
-        <button type="button" class="ghost" id="btnAdvise">Advise</button>
+        <button type="button" class="ghost" id="btnAdvise">Kẻ path</button>
+        <label class="ghost" id="btnChartPhoto" style="display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;border:1px solid var(--line);cursor:pointer;font:700 13px inherit;">Drop chart ảnh<input type="file" accept="image/*" multiple hidden id="chartFiles" /></label>
       </div>
-      <div class="st" id="noteSt">Notes lưu trên pipe — không phải lệnh sàn.</div>
+      <div class="st" id="noteSt">Note + ảnh cao thủ → kẻ line / Fib. Không RSI. Không phải lệnh sàn.</div>
       <ul id="noteList"></ul>
       <div class="reply" id="adviseOut"></div>
     </div>
@@ -216,6 +217,8 @@
   var drag = null;
   var hover = null;
   var lastCall = null;
+  var forecast = null;
+  var chartReads = [];
   var layout = { left: 10, right: 72, top: 12, bot: 28, w: 0, h: 0, lo: 0, hi: 1, start: 0, end: 0, cw: 1 };
   function apiBase() {
     if (window.FX_PIPE) return window.FX_PIPE.replace(/\/$/, "");
@@ -584,6 +587,7 @@
     ctx.fillText(n2(last), w - right + 6, Y(last) + 4);
 
     paintDrawings();
+    paintForecast();
     if (hover && hover.x >= left && hover.x <= w - right && hover.y >= top && hover.y <= h - bot) {
       ctx.strokeStyle = "rgba(232,237,244,.35)";
       ctx.setLineDash([3, 3]);
@@ -696,6 +700,48 @@
     drawings.splice(sel, 1);
     sel = -1;
     render();
+  }
+  function stampForecast(path) {
+    forecast = path && (path.path || path.hlines) ? path : null;
+    if (!forecast) { render(); return; }
+    (forecast.hlines || []).forEach(function (p) {
+      drawings.push({ type: "hline", p: p, auto: true });
+    });
+    if (forecast.fib && forecast.fib.hi !== forecast.fib.lo && bars.length) {
+      var t1 = bars[Math.max(0, bars.length - 24)].t;
+      var t2 = bars[bars.length - 1].t + 8 * barMs();
+      drawings.push({ type: "fib", t1: t1, p1: forecast.fib.hi, t2: t2, p2: forecast.fib.lo, auto: true });
+    }
+    render();
+  }
+  function paintForecast() {
+    if (!forecast || !forecast.path || forecast.path.length < 2 || bars.length < 2) return;
+    var t0 = bars[bars.length - 1].t;
+    var step = barMs();
+    ctx.save();
+    ctx.strokeStyle = "#e0b13a";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    forecast.path.forEach(function (pt, i) {
+      var x = tToX(t0 + (i + 1) * step * 3);
+      var y = Y(pt.p);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#e0b13a";
+    ctx.font = "10px Segoe UI";
+    forecast.path.forEach(function (pt, i) {
+      var x = tToX(t0 + (i + 1) * step * 3);
+      var y = Y(pt.p);
+      ctx.beginPath();
+      ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      if (pt.label) ctx.fillText(n2(pt.p) + " " + pt.label, x + 6, y - 4);
+    });
+    ctx.restore();
   }
 
   function render() {
@@ -846,21 +892,51 @@
   $("btnAdvise").addEventListener("click", function () {
     var btn = $("btnAdvise");
     btn.disabled = true;
-    $("noteSt").textContent = "Đang advise…";
-    var d = decide();
+    $("noteSt").textContent = "Đang kẻ path…";
+    var last = bars.length ? bars[bars.length - 1] : null;
     postJson(apiBase() + "/api/advise", {
       tf: tf,
       fx: fx,
-      decide: { side: d.side, title: d.title, lead: d.lead, why: d.why, lvls: d.lvls }
+      lastBar: last ? { h: last.h, l: last.l, c: last.c } : null,
+      chartReads: chartReads.map(function (c) { return c.name || c; }),
+      images: chartReads.slice(-4).map(function (c) {
+        return { mime: c.mime || "image/png", data: c.dataUrl || "" };
+      }).filter(function (im) { return im.data; })
     }).then(function (r) {
       if (!r.j || !r.j.ok) throw new Error((r.j && r.j.err && r.j.err[0]) || "advise fail");
       lastAdvise = r.j.advise || "";
       if (r.j.notes) notes = r.j.notes;
-      $("noteSt").textContent = "Advise xong · không phải lệnh sàn";
+      $("noteSt").textContent = "Path kẻ xong · không phải lệnh sàn";
       paintNotes();
+      stampForecast(r.j.path);
     }).catch(function (e) {
       $("noteSt").textContent = String(e.message || e);
     }).then(function () { btn.disabled = false; });
+  });
+  $("chartFiles").addEventListener("change", function (ev) {
+    var files = Array.prototype.slice.call(ev.target.files || []);
+    ev.target.value = "";
+    if (!files.length) return;
+    $("noteSt").textContent = "Đọc " + files.length + " ảnh…";
+    Promise.all(files.map(function (f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve({ name: f.name, dataUrl: r.result }); };
+        r.onerror = reject;
+        r.readAsDataURL(f);
+      });
+    })).then(function (shots) {
+      shots.forEach(function (s) {
+        var mime = "image/png";
+        var m = String(s.dataUrl || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);/);
+        if (m) mime = m[1];
+        chartReads.push({ name: s.name || "chart", mime: mime, dataUrl: s.dataUrl });
+      });
+      $("noteSt").textContent = chartReads.length + " ảnh chart trong feed. Bấm Kẻ path.";
+    }).catch(function () { $("noteSt").textContent = "Đọc ảnh fail"; });
+  });
+  $("btnClearDraw").addEventListener("click", function () {
+    drawings = []; draft = null; sel = -1; forecast = null; render();
   });
   loadNotes();
   function setTool(name) {
@@ -882,7 +958,6 @@
     if (sel >= 0) dropSel();
     else { drawings.pop(); sel = -1; render(); }
   });
-  $("btnClearDraw").addEventListener("click", function () { drawings = []; draft = null; sel = -1; render(); });
 
   function setZoom(n, anchorX) {
     var cap = Math.max(12, bars.length || 200);

@@ -1,5 +1,5 @@
 import { fetchTick, fetchBars, ALLOWED, jsonHeaders } from "./feed.mjs";
-import { snapshotFrom, askClaude, clampNote } from "./advise.mjs";
+import { snapshotFrom, askClaude, clampNote, parsePath } from "./advise.mjs";
 
 const KEY = "notes:philip";
 const MAX_NOTES = 80;
@@ -86,13 +86,15 @@ export default {
         const snap = snapshotFrom({
           tf: body.tf,
           fx: body.fx,
-          decide: body.decide,
+          lastBar: body.lastBar,
+          chartReads: body.chartReads,
           notes: pack.notes
         });
-        const text = await askClaude(env.ANTHROPIC_API_KEY, snap);
-        pack.lastAdvise = text;
+        const text = await askClaude(env.ANTHROPIC_API_KEY, snap, body.images);
+        const pathDraw = parsePath(text);
+        pack.lastAdvise = pathDraw.note || text;
         const next = await putPack(env, pack);
-        return json({ ok: true, advise: text, notes: next.notes, at: next.at });
+        return json({ ok: true, advise: pathDraw.note || text, path: pathDraw, notes: next.notes, at: next.at });
       }
       return json({ ok: false, err: ["not found"] }, 404);
     } catch (e) {

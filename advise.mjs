@@ -14,53 +14,99 @@ export function snapshotFrom(body) {
     if (typeof n === "string") return clampNote(n);
     return clampNote(n && n.text);
   }).filter(Boolean);
+  const last = body && body.lastBar ? body.lastBar : null;
   return {
     tf: tf,
     fx: fx,
-    side: d.side || "WAIT",
-    title: d.title || "",
-    lead: d.lead || "",
-    why: Array.isArray(d.why) ? d.why.slice(0, 8) : [],
-    lvls: d.lvls || null,
-    notes: lastN
+    lastBar: last,
+    notes: lastN,
+    chartReads: Array.isArray(body && body.chartReads) ? body.chartReads.slice(-12) : []
   };
 }
 
 export function systemPrompt() {
   return [
-    "You are a gold-desk coach for XAUUSD, not a broker.",
-    "Read the user's daily notes plus the current EMA/RSI/ATR call.",
-    "Reply in Vietnamese, short, concrete. 6–10 lines max.",
-    "Do not place or imply a live order. Say nhận định, not lệnh sàn.",
-    "If notes conflict with the rule call, name the conflict.",
-    "If data is thin, say WAIT. Never invent a price."
+    "You are a gold-desk path coach for XAUUSD, not a broker and not an RSI bot.",
+    "Use only price structure: swing high / swing low, equal highs, trend line, Fibonacci 0.382 / 0.5 / 0.618.",
+    "Do not mention EMA, RSI, ATR, MACD, or stochastic.",
+    "Reply with JSON only, no markdown. Shape:",
+    '{"bias":"up|down|range","path":[{"p":number,"label":"string"}],"hlines":[number],"fib":{"hi":number,"lo":number}|null,"note":"vietnamese 4-6 lines"}',
+    "path is 3–6 future price points in time order (next reaction → later). hlines are key highs/lows to draw.",
+    "Never invent a live order. If swings are missing, bias=range and path stays near last price."
   ].join(" ");
 }
 
 export function userPrompt(snap) {
-  const lv = snap.lvls
-    ? ("Entry " + snap.lvls.entry + " · SL " + snap.lvls.sl + " · TP1 " + snap.lvls.tp1 + " · TP2 " + snap.lvls.tp2)
-    : "no levels";
+  const last = snap.lastBar
+    ? ("Last candle H " + snap.lastBar.h + " L " + snap.lastBar.l + " C " + snap.lastBar.c)
+    : "no last candle";
   const notes = snap.notes.length
     ? snap.notes.map(function (n, i) { return (i + 1) + ". " + n; }).join("\n")
     : "(no notes yet)";
+  const reads = snap.chartReads.length
+    ? snap.chartReads.join("\n")
+    : "(no chart-photo reads yet)";
   return [
     "Khung: " + snap.tf,
     "FX mid: " + (snap.fx == null ? "—" : snap.fx),
-    "Rule call: " + snap.side + " — " + snap.title,
-    snap.lead,
-    "Why: " + (snap.why.join(" | ") || "—"),
-    "Levels: " + lv,
+    last,
+    "",
+    "Reads from cao thủ chart photos:",
+    reads,
     "",
     "Daily notes (oldest → newest):",
     notes,
     "",
-    "Advise for the next session. Keep it a coach note, not an order."
+    "Forecast the next price path. JSON only."
   ].join("\n");
 }
 
-export async function askClaude(apiKey, snap) {
+export function parsePath(text) {
+  const raw = String(text || "").trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return { note: raw.slice(0, 4000), path: [], hlines: [], fib: null, bias: "range" };
+  try {
+    const j = JSON.parse(raw.slice(start, end + 1));
+    const path = Array.isArray(j.path) ? j.path.map(function (pt) {
+      return { p: Number(pt.p), label: String(pt.label || "").slice(0, 40) };
+    }).filter(function (pt) { return isFinite(pt.p); }).slice(0, 8) : [];
+    const hlines = Array.isArray(j.hlines) ? j.hlines.map(Number).filter(isFinite).slice(0, 8) : [];
+    let fib = null;
+    if (j.fib && isFinite(j.fib.hi) && isFinite(j.fib.lo) && j.fib.hi !== j.fib.lo) {
+      fib = { hi: Number(j.fib.hi), lo: Number(j.fib.lo) };
+    }
+    return {
+      bias: /up|down|range/.test(String(j.bias || "")) ? String(j.bias) : "range",
+      path: path,
+      hlines: hlines,
+      fib: fib,
+      note: String(j.note || raw).slice(0, 4000)
+    };
+  } catch (e) {
+    return { note: raw.slice(0, 4000), path: [], hlines: [], fib: null, bias: "range" };
+  }
+}
+
+function imageBlocks(imgs) {
+  if (!Array.isArray(imgs)) return [];
+  return imgs.slice(-4).map(function (im) {
+    var data = String((im && im.data) || "");
+    var mime = String((im && im.mime) || "image/png");
+    var m = data.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (m) { mime = m[1]; data = m[2]; }
+    if (!data) return null;
+    return {
+      type: "image",
+      source: { type: "base64", media_type: mime, data: data }
+    };
+  }).filter(Boolean);
+}
+
+export async function askClaude(apiKey, snap, imgs) {
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing");
+  var content = imageBlocks(imgs);
+  content.push({ type: "text", text: userPrompt(snap) });
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -70,9 +116,9 @@ export async function askClaude(apiKey, snap) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 500,
+      max_tokens: 700,
       system: systemPrompt(),
-      messages: [{ role: "user", content: userPrompt(snap) }]
+      messages: [{ role: "user", content: content }]
     })
   });
   const j = await r.json();

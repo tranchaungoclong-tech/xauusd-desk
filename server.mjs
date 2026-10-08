@@ -9,7 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { fetchTick, fetchBars, ALLOWED, jsonHeaders } from "./feed.mjs";
 import { readPack, addNote, writePack } from "./notes-store.mjs";
-import { snapshotFrom, askClaude } from "./advise.mjs";
+import { snapshotFrom, askClaude, parsePath } from "./advise.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const HOST = "127.0.0.1";
@@ -125,14 +125,16 @@ const server = http.createServer(function (req, res) {
       const snap = snapshotFrom({
         tf: body.tf,
         fx: body.fx,
-        decide: body.decide,
+        lastBar: body.lastBar,
+        chartReads: body.chartReads,
         notes: pack.notes
       });
-      askClaude(process.env.ANTHROPIC_API_KEY, snap).then(function (text) {
-        pack.lastAdvise = text;
+      askClaude(process.env.ANTHROPIC_API_KEY, snap, body.images).then(function (text) {
+        const pathDraw = parsePath(text);
+        pack.lastAdvise = pathDraw.note || text;
         pack.at = Date.now();
         writePack(pack);
-        jsonRes(res, 200, { ok: true, advise: text, notes: pack.notes, at: pack.at });
+        jsonRes(res, 200, { ok: true, advise: pathDraw.note || text, path: pathDraw, notes: pack.notes, at: pack.at });
       }).catch(function (e) {
         jsonRes(res, 502, { ok: false, err: [String(e.message || e)] });
       });
