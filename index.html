@@ -610,21 +610,28 @@
     }
     ctx.textAlign = "left";
 
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    var bodyW = Math.max(3, Math.min(cw * 0.72, 18));
+    var wickW = Math.max(1.6, Math.min(bodyW * 0.28, 3));
     vis.forEach(function (b, k) {
       var i = i0 + k;
       var x = idxToX(i);
       if (x < left - 8 || x > w - right + 8) return;
       var up = b.c >= b.o;
-      ctx.strokeStyle = up ? "#3dd68c" : "#f36565";
-      ctx.lineWidth = Math.max(1.25, 1.6 / dpr);
+      var col = up ? "#3dd68c" : "#f36565";
+      ctx.strokeStyle = col;
+      ctx.fillStyle = col;
+      ctx.lineWidth = wickW;
       ctx.beginPath();
       ctx.moveTo(x, Y(b.h)); ctx.lineTo(x, Y(b.l)); ctx.stroke();
       var y1 = Y(Math.max(b.o, b.c)), y2 = Y(Math.min(b.o, b.c));
-      ctx.fillStyle = up ? "#3dd68c" : "#f36565";
-      ctx.fillRect(x - Math.max(1.2, cw * 0.32), y1, Math.max(2.4, cw * 0.64), Math.max(1, y2 - y1));
+      ctx.fillRect(x - bodyW / 2, y1, bodyW, Math.max(wickW, y2 - y1));
     });
     function eline(full, color) {
-      ctx.strokeStyle = color; ctx.lineWidth = 1.4; ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(2, Math.min(cw * 0.18, 3.2));
+      ctx.beginPath();
       var started = false;
       for (var i = i0; i <= i1; i++) {
         var v = full[i];
