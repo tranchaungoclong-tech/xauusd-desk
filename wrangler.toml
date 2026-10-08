@@ -3,8 +3,6 @@ main = "worker.js"
 compatibility_date = "2026-10-07"
 workers_dev = true
 
-# Bind after: npx wrangler kv namespace create NOTES --config wrangler.toml
-# Then paste the id below and: npx wrangler secret put ANTHROPIC_API_KEY --config wrangler.toml
-# [[kv_namespaces]]
-# binding = "NOTES"
-# id = "PASTE_KV_ID"
+[[kv_namespaces]]
+binding = "NOTES"
+id = "72a7787247124e249c1dc81b564503a8"
