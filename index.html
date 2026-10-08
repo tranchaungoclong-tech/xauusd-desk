@@ -18,7 +18,7 @@
       --wait: #c9a227;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; }
+    html, body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; touch-action: manipulation; }
     body { min-height: 100vh; padding: 12px 12px calc(18px + env(safe-area-inset-bottom)); }
     .wrap { max-width: 1100px; margin: 0 auto; }
     header {
@@ -94,6 +94,12 @@
     .draw { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
     .draw button { padding: 8px 12px; border-radius: 999px; background: var(--card); }
     .draw button.on { background: var(--gold); color: #1a1404; border-color: var(--gold); }
+    .pinchbar {
+      display: none; align-items: center; gap: 10px;
+      margin: 8px 2px 0; color: var(--mute); font-size: 12px; font-weight: 700;
+    }
+    .pinchbar input { flex: 1; height: 36px; accent-color: var(--gold); }
+    @media (pointer: coarse) { .pinchbar { display: flex; } }
     .hint { font-size: 11px; color: var(--mute); margin: 6px 2px 0; }
     .feeds { margin-top: 10px; font-size: 12px; color: var(--mute); line-height: 1.5; }
     .feeds b { color: var(--ink); }
@@ -202,6 +208,9 @@
       </div>
       <canvas id="chart" width="1100" height="420"></canvas>
     </div>
+    <label class="pinchbar">2 ngón · kéo để phóng / thu
+      <input id="pinchRange" type="range" min="12" max="400" value="80" />
+    </label>
 
     <div class="coach" id="diaryBox">
       <h3>NHẬT KÝ</h3>
@@ -1096,10 +1105,22 @@
     else { drawings.pop(); sel = -1; render(); }
   });
 
+  var pinchRange = $("pinchRange");
+  function syncPinchRange() {
+    if (!pinchRange) return;
+    var cap = Math.max(12, bars.length || 400);
+    pinchRange.max = String(Math.min(800, cap));
+    if (document.activeElement !== pinchRange) pinchRange.value = String(Math.round(visN));
+  }
+  pinchRange.addEventListener("input", function () {
+    setZoom(Number(pinchRange.value));
+  });
+
   function setZoom(n, anchorX) {
     var cap = Math.max(12, bars.length || 200);
     var old = visN;
     visN = Math.max(12, Math.min(n, cap));
+    syncPinchRange();
     if (anchorX != null && bars.length) {
       var i = xToIdx(anchorX);
       var end = rightIdx();
@@ -1257,7 +1278,7 @@
     render();
   }
   ["gesturestart", "gesturechange", "gestureend"].forEach(function (n) {
-    cv.addEventListener(n, function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener(n, function (e) { e.preventDefault(); }, { passive: false });
   });
   cv.addEventListener("mousedown", startDrag);
   window.addEventListener("mousemove", moveDrag);
