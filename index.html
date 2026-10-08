@@ -1238,27 +1238,25 @@
   function applyPlaybook(book) {
     if (!book || !bars.length) return;
     var x = book.xauusd || {};
-    var t0 = bars[Math.max(0, bars.length - 40)].t;
-    var t1 = bars[bars.length - 1].t;
-    var t2 = t1 + 18 * barMs();
-    drawings = drawings.filter(function (o) { return !o.auto; });
-    function h(p) { drawings.push({ type: "hline", p: p, auto: true }); }
-    if (x.reject) h(x.reject);
-    if (x.sell && x.sell.entry) h(x.sell.entry);
-    if (x.sell && x.sell.tp) x.sell.tp.forEach(h);
-    if (x.buy && x.buy.confirm) h(x.buy.confirm);
-    if (x.buy && x.buy.tp) h(x.buy.tp);
-    if (x.sell && x.sell.entry && x.sell.tp && x.sell.tp[0]) {
-      drawings.push({ type: "line", t1: t0, p1: x.reject || x.sell.entry, t2: t2, p2: x.sell.tp[0], auto: true });
+    var sell = x.sell || {};
+    var entry = sell.entry;
+    var tp = (sell.tp && sell.tp[0]) || null;
+    var sl = sell.sl || 15;
+    if (!(entry > 0) || !(tp > 0)) {
+      $("noteSt").textContent = "Playbook thiếu SELL entry/TP";
+      return;
     }
-    var bits = [];
-    if (x.bias) bits.push("XAU " + x.bias);
-    if (x.sell) bits.push("Canh SELL " + x.sell.entry + " TP " + (x.sell.tp || []).join("/") + " cut ~" + (x.sell.sl || 15));
-    if (x.buy) bits.push("BUY chỉ khi ổn định trên " + x.buy.confirm + " TP " + x.buy.tp);
-    if (book.usoil) bits.push("USOil buy dips " + (book.usoil.support || []).join("-") + " / resist " + book.usoil.resist);
-    bits.push("Ví dụ từ playbook GitHub — không copy chart cao thủ. Không phải lệnh sàn.");
-    lastAdvise = bits.join("\n");
-    $("noteSt").textContent = "Ví dụ vào lệnh từ playbook · không phải lệnh sàn";
+    var tNow = bars[bars.length - 1].t;
+    var step = barMs();
+    var tA = tNow - 6 * step;
+    var tB = tNow + 10 * step;
+    drawings = drawings.filter(function (o) { return !o.auto; });
+    drawings.push({ type: "hline", p: entry, auto: true });
+    drawings.push({ type: "hline", p: tp, auto: true });
+    drawings.push({ type: "hline", p: entry + sl, auto: true });
+    drawings.push({ type: "rect", t1: tA, p1: entry + sl, t2: tB, p2: tp, auto: true });
+    lastAdvise = "Ví dụ 1 lệnh — SELL " + entry + " · cắt " + (entry + sl) + " · TP " + tp + "\nKhông phải lệnh sàn. BUY 4250 không vẽ trừ khi giá ổn định trên đó.";
+    $("noteSt").textContent = "1 lệnh SELL · không phải lệnh sàn";
     paintNotes();
     render();
   }
